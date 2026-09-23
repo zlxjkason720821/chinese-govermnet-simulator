@@ -33,14 +33,42 @@ GENERAL_SECRETARY = "总书记"
 RANKS = [ALTERNATE, MEMBER, POLITBURO, STANDING, GENERAL_SECRETARY]
 
 # 规模按这个世界的体量缩放。真实中央委员会两百余人，这里一个省的世界装不下。
-# 照真实规模来。二十届是中央委员 205 人、候补委员 152 人、
-# 政治局委员 24 人（含常委 7 人）。
+# 名额由全国代表大会决定，不是一个永远不变的常量。
+# 这四十年里它一届一届在变，而且是查得到的：
+#
+#   十三大 1987　175 委员 + 110 候补　（首次差额选举）
+#   十四大 1992　189 + 130
+#   十五大 1997　193 + 151
+#   十六大 2002　198 + 158
+#   十七大 2007　204 + 167　（这一届起政治局不再设候补委员）
+#   十八大 2012　205 + 171
+#   十九大 2017　204 + 172
+#   二十大 2022　205 + 171
 #
 # 规模不能缩：光是三十一个省区市的党政正职就有六十多人，再加上
-# 中央和国务院几十个部委的正职，委员会小了就装不下这些"本来就该在里面"的人，
+# 中央和国务院几十个部委的正职，委员会小了就装不下，
 # 于是省委书记会落选——那是算法的毛病，不是制度。
-SIZE = {ALTERNATE: 150, MEMBER: 205, POLITBURO: 24, STANDING: 7,
-        GENERAL_SECRETARY: 1}
+QUOTA = {
+    13: (175, 110), 14: (189, 130), 15: (193, 151), 16: (198, 158),
+    17: (204, 167), 18: (205, 171), 19: (204, 172), 20: (205, 171),
+    21: (205, 171),          # 还没开，沿用上一届的名额
+}
+
+# 政治局的规模。二十届是 24 人（含常委 7 人）。
+POLITBURO_SIZE = 24
+STANDING_SIZE = 7
+
+
+def quota(congress):
+    """这一届选多少委员、多少候补。"""
+    m, a = QUOTA.get(congress, QUOTA[max(QUOTA)])
+    return {MEMBER: m, ALTERNATE: a, POLITBURO: POLITBURO_SIZE,
+            STANDING: STANDING_SIZE, GENERAL_SECRETARY: 1}
+
+
+# 兼容旧调用：没指明届次时按最近一届的名额
+SIZE = {ALTERNATE: 171, MEMBER: 205, POLITBURO: POLITBURO_SIZE,
+        STANDING: STANDING_SIZE, GENERAL_SECRETARY: 1}
 
 # 蓝图二十：七上八下必须按历史惯例建模。
 # 党代会当年年满 68 的不再进入新一届；67 及以下可以。
@@ -55,11 +83,14 @@ def rules_cfg():
 
 
 def ex_officio_posts():
-    """默认进中央委员会的职务。
+    """中央委员的主要来源岗位。
 
-    公开的构成惯例：各省、自治区、直辖市党委书记及政府首长，
-    中共中央直属机构和国务院下属机构的正部级主要负责人。
-    这不是"表现好所以当选"，是这个位子本来就在委员会里。
+    公开的构成说法是：各省、自治区、直辖市党委书记及政府首长，
+    中共中央直属机构和国务院下属机构的正部级主要负责人，等等。
+
+    注意这是**来源分类**，不是逐岗位配额——中央委员不是正省部级的
+    同义词，某个岗位也不天然拥有一个席位。所以它在这里只用来把人
+    排到前面，不保证进得去：党代会之后才上任的照样要等下一届。
     """
     return {x["post"] for x in rules_cfg()["ex_officio"]}
 
@@ -173,6 +204,7 @@ def _compose(con, on, congress, rng):
     排序依据从重到轻：现任行政层次、上一届党内身份（连任是常态）、
     地域与部门结构、年龄梯次。政绩不在其中。
     """
+    size = quota(congress)
     pool = _candidates(con, on)
     prev = {r["character_id"]: r["status"] for r in con.execute(
         "SELECT character_id, status FROM party_central_status WHERE end_date IS NULL")}
@@ -187,7 +219,7 @@ def _compose(con, on, congress, rng):
     pool.sort(key=key)
 
     # 常委：只从担任中央职务的人里出
-    standing = [c for c in pool if c["id"] in central_posts][:SIZE[STANDING]]
+    standing = [c for c in pool if c["id"] in central_posts][:size[STANDING]]
     standing_ids = {c["id"] for c in standing}
 
     # 政治局：常委，加上按惯例兼任的几个地方党委书记，再按层次补足。
@@ -204,11 +236,11 @@ def _compose(con, on, congress, rng):
                    and c["order"] >= LEVEL_ORDER["正部级"]]
     politburo = list(standing)
     for c in eligible_pb:                       # 先把按惯例该进的放进去
-        if c["pb_region"] and len(politburo) < SIZE[POLITBURO]:
+        if c["pb_region"] and len(politburo) < size[POLITBURO]:
             politburo.append(c)
     seated = {c["id"] for c in politburo}
     for c in eligible_pb:
-        if len(politburo) >= SIZE[POLITBURO]:
+        if len(politburo) >= size[POLITBURO]:
             break
         if c["id"] not in seated:
             politburo.append(c)
@@ -222,7 +254,7 @@ def _compose(con, on, congress, rng):
             continue
         by_system.setdefault(c["al"], []).append(c)
     rest, seen, systems, i = [], set(), sorted(by_system), 0
-    need = SIZE[MEMBER] + SIZE[ALTERNATE] - len(politburo)
+    need = size[MEMBER] + size[ALTERNATE] - len(politburo)
     while len(rest) < need and any(by_system.values()):
         sysname = systems[i % len(systems)]
         i += 1
@@ -240,14 +272,16 @@ def hold_congress(con, on, rng, rules):
     这是唯一能产生中央委员身份的时刻（二十四）。
     """
     congress = CONGRESS_YEARS[on.year]
+    _step_down(con, on)
     con.execute("UPDATE party_central_status SET end_date=? WHERE end_date IS NULL",
                 (on.isoformat(),))
     politburo, standing, rest, prev, central_posts = _compose(con, on, congress, rng)
     if not politburo and not rest:
         return []
 
-    members = rest[:SIZE[MEMBER] - len(politburo)]
-    alternates = rest[len(members):len(members) + SIZE[ALTERNATE]]
+    size = quota(congress)
+    members = rest[:size[MEMBER] - len(politburo)]
+    alternates = rest[len(members):len(members) + size[ALTERNATE]]
 
     # 总书记：优先连任；否则从常委里出，并且必须是中共中央总书记这个岗位上的人。
     gs_slot = con.execute(
@@ -289,50 +323,92 @@ def hold_congress(con, on, rng, rules):
     return list(assign.items())
 
 
+def seat_vacated(con, cid, on, reason):
+    """这个人的党内身份终止了。如果他是中央委员，位子当场由候补委员递补。
+
+    出缺和递补是同一件事的两面，必须在同一个动作里完成。
+    分开写就会出岔子：去世那一行先把身份关掉，月底再扫就什么也看不见了，
+    于是名册一路缩水，候补委员在旁边闲着——上一版正是这么错的。
+    """
+    rows = con.execute(
+        "SELECT id, status, congress FROM party_central_status "
+        "WHERE character_id=? AND end_date IS NULL", (cid,)).fetchall()
+    if not rows:
+        return None
+    con.execute("UPDATE party_central_status SET end_date=? "
+                "WHERE character_id=? AND end_date IS NULL", (on.isoformat(), cid))
+    seat = next((r for r in rows if r["status"] == MEMBER), None)
+    if seat is None:
+        return None                # 候补委员、政治局出缺都不由候补委员递补
+    return _promote_alternate(con, on, seat["congress"], reason)
+
+
+def _promote_alternate(con, on, congress, reason):
+    """按当选时的得票顺序，递补一名候补委员（入库顺序即名次）。"""
+    up = con.execute(
+        "SELECT p.id, p.character_id FROM party_central_status p "
+        "JOIN character c ON c.id = p.character_id "
+        "WHERE p.end_date IS NULL AND p.status=? AND c.alive=1 "
+        "AND c.discipline_status='CLEAR' ORDER BY p.id LIMIT 1", (ALTERNATE,)).fetchone()
+    if up is None:
+        return None                # 候补也用完了，那就空着
+    con.execute("UPDATE party_central_status SET end_date=? WHERE id=?",
+                (on.isoformat(), up["id"]))
+    con.execute(
+        "INSERT INTO party_central_status(character_id,status,congress,start_date) "
+        "VALUES(?,?,?,?)", (up["character_id"], MEMBER, congress, on.isoformat()))
+    log_event(con, on, "central_alternate_promoted",
+              {"note": "中央委员出缺（%s），由候补委员依次递补" % reason},
+              actors=[up["character_id"]])
+    return up["character_id"]
+
+
 def fill_vacancies(con, on):
     """中央委员出缺，由候补委员按得票多少依次递补（党章第二十二条）。
 
-    按缺额补，不盯着某一个人离开——人退了、走了、被处分了，
-    党内身份在别处就已经终止了（见 npc._close_central_status）。
-    这里只回答一个问题：这一届选了多少委员，现在还剩多少。
+    出缺只有两种：去世，和开除党籍。不包括退休，也不包括岗位变动——
+    地方或部委产生职位空缺，不会触发中央委员递补，那是两本不同的名册、
+    两类不同的事件。
 
-    没有递补，委员会就只是党代会那一天的快照：三年下来
-    一百八十一个中央委员会掉到一百三十二个，而候补委员在旁边闲着。
+    真实的二十届，四年递补十四名（另有八人因违纪违法被开除党籍）。
+    这是个位数量级的事，不是每月都在发生的常规操作。
     """
-    cur = con.execute(
-        "SELECT max(congress) FROM party_central_status WHERE end_date IS NULL"
-    ).fetchone()[0]
-    if cur is None:
-        return []
-    elected = con.execute(
-        "SELECT count(*) FROM party_central_status WHERE congress=? AND status=? "
-        "AND start_date = (SELECT min(start_date) FROM party_central_status "
-        "                  WHERE congress=?)", (cur, MEMBER, cur)).fetchone()[0]
-    sitting = con.execute(
-        "SELECT count(*) FROM party_central_status WHERE end_date IS NULL AND status=?",
-        (MEMBER,)).fetchone()[0]
-    short = elected - sitting
-    if short <= 0:
-        return []
-    # 候补委员按当初的名次（入库顺序即得票顺序）依次递补
-    ups = con.execute(
-        "SELECT p.id, p.character_id FROM party_central_status p "
+    gone = con.execute(
+        "SELECT p.id, p.character_id, p.congress FROM party_central_status p "
         "JOIN character c ON c.id = p.character_id "
-        "WHERE p.end_date IS NULL AND p.status=? AND c.alive=1 AND c.retired=0 "
-        "AND c.discipline_status='CLEAR' ORDER BY p.id LIMIT ?",
-        (ALTERNATE, short)).fetchall()
+        "WHERE p.end_date IS NULL AND p.status = ? "
+        "AND (c.alive = 0 OR c.discipline_status = 'REMOVED')", (MEMBER,)).fetchall()
+    if not gone:
+        return []
     filled = []
-    for up in ups:
+    for r in gone:                        # 兜底：有漏网的，这里补上
         con.execute("UPDATE party_central_status SET end_date=? WHERE id=?",
-                    (on.isoformat(), up["id"]))
-        con.execute(
-            "INSERT INTO party_central_status(character_id,status,congress,start_date) "
-            "VALUES(?,?,?,?)", (up["character_id"], MEMBER, cur, on.isoformat()))
-        log_event(con, on, "central_alternate_promoted",
-                  {"note": "中央委员出缺，由候补委员递补"},
-                  actors=[up["character_id"]])
-        filled.append(up["character_id"])
+                    (on.isoformat(), r["id"]))
+        who = _promote_alternate(con, on, r["congress"], "出缺")
+        if who:
+            filled.append(who)
     return filled
+
+
+def _step_down(con, on):
+    """换届时，超过年龄线的党和国家领导人离任。
+
+    这一层不按行政退休年龄走，走的是党代会上的七上八下：
+    当年年满六十八的不再进入新一届，位子在换届这天腾出来。
+    """
+    from gongpu import npc
+    out = []
+    for r in con.execute(
+            "SELECT DISTINCT c.id, c.birth_date FROM office_holding h "
+            "JOIN character c ON c.id = h.character_id "
+            "JOIN position_slot s ON s.id = h.position_slot_id "
+            "JOIN position_definition d ON d.id = s.position_definition_id "
+            "WHERE h.end_date IS NULL AND c.alive=1 AND c.retired=0 "
+            "AND d.leadership_level IN ('副国级','正国级')").fetchall():
+        if _age(r["birth_date"], on) > AGE_CEILING:
+            npc.retire(con, r["id"], on)
+            out.append(r["id"])
+    return out
 
 
 def _seat_post(con, cid, on, post_name, primary=True):
@@ -403,6 +479,18 @@ def _seat_state_chairman(con, cid, on):
     log_event(con, on, "state_chairman",
               {"note": "总书记兼任国家主席"}, actors=[cid])
     return slot["id"]
+
+
+def committee_size(con):
+    """中央委员会现有多少人。
+
+    政治局委员、常委、总书记同时也是中央委员，只是挂着更高的身份标签，
+    所以只数"中央委员"那一档会少二十几个人。
+    """
+    return con.execute(
+        "SELECT count(*) FROM party_central_status WHERE end_date IS NULL "
+        "AND status IN (?,?,?,?)",
+        (MEMBER, POLITBURO, STANDING, GENERAL_SECRETARY)).fetchone()[0]
 
 
 def roster(con, on=None):

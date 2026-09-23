@@ -113,6 +113,20 @@ def test_中央委员要有五年以上党龄(world):
     assert not bad, "党龄不足五年的不能进中央委员会：%s" % bad[:5]
 
 
+def test_上海经历不是总书记的必要条件():
+    """江泽民、习近平曾任上海市委书记，胡锦涛没有。
+    重要地区任职是履历加分项，不能设成必经条件——
+    这一条在代码里的表现是：根本没有这样一条规则。
+    """
+    import io
+    from gongpu import paths
+    for f in ("central.yaml", "tracks.yaml"):
+        text = (paths.DATA / f).read_text(encoding="utf-8")
+        assert "上海" not in text or "必" not in text.split("上海")[1][:40]
+    # 政治局兼任地区是一组，不是单独把上海挑出来
+    assert len(central.politburo_regions()) >= 5
+
+
 def test_政治局委员年龄线比中央委员紧(world):
     """政治局委员的预备人选一般是 64 周岁以下的正省部级以上干部。"""
     assert ministries.committee_rules()["politburo_max_age"] < central.AGE_CEILING
@@ -133,20 +147,74 @@ def test_政治局委员都是正部级以上(world):
             assert LEVEL_ORDER[lvl[0]] >= LEVEL_ORDER["正部级"], lvl[0]
 
 
-def test_委员会规模装得下所有省级正职(world):
-    """规模缩了，省委书记就会落选——那是算法的毛病，不是制度。"""
-    assert central.SIZE[central.MEMBER] >= 200
-    assert central.SIZE[central.POLITBURO] == 24
-    assert central.SIZE[central.STANDING] == 7
+def test_名额按届次走不是常量():
+    """名额由全国代表大会决定，一届一届在变，而且是查得到的。"""
+    assert central.quota(13)[central.MEMBER] == 175      # 十三大 1987
+    assert central.quota(13)[central.ALTERNATE] == 110
+    assert central.quota(20)[central.MEMBER] == 205      # 二十大 2022
+    assert central.quota(20)[central.ALTERNATE] == 171
+    assert central.quota(13) != central.quota(20)
 
 
-def test_候补委员会递补():
-    con, rng, clock, _ = new_game(seed="递补")
-    advance_to(con, clock, date(2010, 12, 31), rng)
+def test_选出来的人数对得上名额():
+    """政治局委员同时也是中央委员，只是挂着更高的身份标签。
+    只数"中央委员"那一档会少二十几个人。"""
+    con, rng, clock, _ = new_game(seed="名额")
+    advance_to(con, clock, date(1988, 12, 31), rng)
+    assert central.committee_size(con) == central.quota(13)[central.MEMBER]
+
+
+def test_退休不终止中央委员身份():
+    """中央委员会是党代会选出来的一届名册，任期五年。
+    任期内从岗位上退下来的人仍然是中央委员，要等下一届换届。
+
+    把退休也算成出缺，是上一版最大的错：三年掉了四十九个委员，
+    候补委员被抽干去填缺。
+    """
+    con, rng, clock, _ = new_game(seed="退休不掉")
+    advance_to(con, clock, date(2005, 12, 31), rng)
+    n = con.execute(
+        "SELECT count(*) FROM party_central_status p "
+        "JOIN character c ON c.id = p.character_id "
+        "WHERE p.end_date IS NULL AND c.retired=1").fetchone()[0]
+    assert n > 0, "五年一届，总有人任期内到龄"
+
+
+def test_递补是个位数量级不是每月常规():
+    """真实的二十届，四年递补十四名。
+
+    上一版二十四年递补了二百九十三次，候补委员从一百五十个剩五十五个——
+    那说明递补逻辑被当成了"把名册补齐"的工具，而不是出缺事件。
+    """
+    con, rng, clock, _ = new_game(seed="递补频度")
+    advance_to(con, clock, date(1992, 9, 30), rng)     # 十三届一整届
     n = con.execute(
         "SELECT count(*) FROM world_event "
         "WHERE event_type='central_alternate_promoted'").fetchone()[0]
-    assert n > 0, "二十多年里总该有中央委员出缺"
+    assert 0 < n < 40, "一届五年递补 %d 次，对照真实的十几次" % n
+
+
+def test_岗位空缺不触发中央委员递补():
+    """地方或部委产生职位空缺，是另一本名册上的事。"""
+    con, rng, clock, _ = new_game(seed="两本名册")
+    advance_to(con, clock, date(1990, 6, 30), rng)
+    before = con.execute(
+        "SELECT count(*) FROM world_event "
+        "WHERE event_type='central_alternate_promoted'").fetchone()[0]
+    # 腾出一个正部级岗位，但人还活着、没被开除
+    row = con.execute(
+        "SELECT s.id, s.holder_id FROM position_slot s "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "WHERE d.leadership_level='正部级' AND s.status='OCCUPIED' LIMIT 1").fetchone()
+    con.execute("UPDATE position_slot SET status='VACANT',holder_id=NULL WHERE id=?",
+                (row["id"],))
+    con.execute("UPDATE office_holding SET end_date=? WHERE position_slot_id=? "
+                "AND end_date IS NULL", (clock.date.isoformat(), row["id"]))
+    assert central.fill_vacancies(con, clock.date) == []
+    after = con.execute(
+        "SELECT count(*) FROM world_event "
+        "WHERE event_type='central_alternate_promoted'").fetchone()[0]
+    assert after == before
 
 
 def test_中央任用面向全国():

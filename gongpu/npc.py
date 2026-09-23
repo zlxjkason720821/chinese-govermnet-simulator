@@ -46,17 +46,22 @@ def vacate(con, char_id, on, reason):
 
 
 def _close_central_status(con, char_id, on):
-    """人退了、走了、被处分了，党内身份随之终止。
+    """党内身份终止。
 
-    身份独立于行政级别（蓝图二十三），但不独立于这个人还在不在。
+    只有去世和开除党籍才算数。**退休不终止中央委员身份**——
+    中央委员会是党代会选出来的一届名册，任期五年，任期内从岗位上退下来
+    的人仍然是中央委员，要等下一届换届才不在名单里。
+
+    原来把退休也算进来，结果三年掉了四十九个委员，候补委员被抽干去填缺。
+    真实的二十届四年只递补了十四名。这两个数字差了一个数量级，
+    差别就出在这一行。
     """
-    con.execute("UPDATE party_central_status SET end_date=? "
-                "WHERE character_id=? AND end_date IS NULL", (on.isoformat(), char_id))
+    central.seat_vacated(con, char_id, on, "去世或开除党籍")
 
 
 def retire(con, char_id, on):
+    # 退休只是离开岗位。中央委员是一届名册上的名字，不随岗位走。
     con.execute("UPDATE character SET retired=1 WHERE id=?", (char_id,))
-    _close_central_status(con, char_id, on)
     slots = vacate(con, char_id, on, "RETIREMENT")
     log_event(con, on, "retirement", {"slots": slots}, actors=[char_id])
     return slots
@@ -100,6 +105,13 @@ def annual_pass(con, on, rng, rules):
             # 判断依据是有没有未了结的问题线索，不能只看 discipline_status——
             # 从出线索到正式立案之间状态还是 CLEAR，人正好从这个缝里走掉。
             if discipline.has_pending(con, c["id"]):
+                continue
+            # 党和国家领导人不在任期中途按年龄办退休：这一层的年龄线
+            # 是党代会上的"七上八下"，在换届那一天起作用（蓝图二十）。
+            # 不这样处理，会出现总书记到龄离任、位子空着、人还挂着常委身份
+            # 这种库里自相矛盾的状态。
+            from gongpu.appointment import LEVEL_ORDER as _LO
+            if _level_order(con, c["id"]) >= _LO["副国级"]:
                 continue
             limit = retirement_age(c["gender"], _level_order(con, c["id"]), on)
             if age >= limit:

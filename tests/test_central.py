@@ -115,13 +115,24 @@ def test_七上八下(played):
             assert age <= central.AGE_CEILING, "%d 岁还进了新一届" % age
 
 
-def test_退休去世就不在名单上(played):
+def test_去世就不在名单上但退休还在(played):
+    """中央委员会是党代会选出来的一届名册，任期五年。
+
+    去世要出缺、要递补；**退休不然**——任期内从岗位上退下来的人
+    仍然是中央委员，要等下一届换届才不在名单里。
+    原先把退休也算成出缺，三年就掉了四十九个委员。
+    """
     con = played[0]
-    bad = con.execute(
+    dead = con.execute(
         "SELECT count(*) FROM party_central_status p "
         "JOIN character c ON c.id=p.character_id "
-        "WHERE p.end_date IS NULL AND (c.alive=0 OR c.retired=1)").fetchone()[0]
-    assert bad == 0
+        "WHERE p.end_date IS NULL AND c.alive=0").fetchone()[0]
+    assert dead == 0, "去世的人要出缺并递补"
+    retired = con.execute(
+        "SELECT count(*) FROM party_central_status p "
+        "JOIN character c ON c.id=p.character_id "
+        "WHERE p.end_date IS NULL AND c.retired=1").fetchone()[0]
+    assert retired > 0, "退休不终止党内身份"
 
 
 def test_省部级退休年龄比县处级晚(played):
