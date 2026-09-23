@@ -56,17 +56,30 @@ def assign(con, character_id, on, rng, organization_id=None):
     tpl = _pick_template(con, character_id, organization_id, on, rng)
     if tpl is None:
         return None
+    # 交办方。上级部署、督办、批示这类事项是上级机关交下来的，
+    # 不是本单位自己冒出来的——"谁交办的"是事项的基本信息之一（§3.1）。
+    origin = organization_id
+    if tpl.get("type") in ("INSTRUCTION", "SUPERVISION", "INSPECTION", "AUDIT"):
+        up = con.execute("SELECT parent_id FROM organization WHERE id=?",
+                         (organization_id,)).fetchone()
+        origin = (up[0] if up and up[0] else organization_id)
     spec = cfg()["kinds"][tpl["kind"]]
     cur = con.execute(
         "INSERT INTO work_item(kind,subject,organization_id,assignee_id,created_date,"
-        "due_date,matter_type,target_org_id,current_stage,secrecy,"
-        "importance,urgency) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        "due_date,matter_type,origin_org_id,target_org_id,current_stage,secrecy,"
+        "importance,urgency) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (tpl["kind"], tpl["t"], organization_id, character_id, on.isoformat(),
          (on + timedelta(days=tpl.get("days", spec["days"]))).isoformat(),
-         tpl.get("type", "ROUTINE"), organization_id, "承办",
+         tpl.get("type", "ROUTINE"), origin, organization_id, "承办",
          tpl.get("secrecy", 0), tpl.get("importance", 50),
          tpl.get("urgency", 50)))
-    return cur.lastrowid
+    mid = cur.lastrowid
+    # 大部分事项是要办文的。公文是事项的主要表现载体（V3 §21）：
+    # 一件事走到哪一步，看的是文走到哪一步。
+    if tpl.get("type") not in ("EMERGENCY", "PETITION"):
+        from gongpu import documents
+        documents.create_for(con, mid, on, rng)
+    return mid
 
 
 _MATTERS = {}

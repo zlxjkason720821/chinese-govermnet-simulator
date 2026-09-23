@@ -290,6 +290,43 @@ CREATE INDEX idx_matter_owner ON work_item(assignee_id, state);
 -- V3 文档里管它叫 matter。同一张表，换个名字读着顺。
 CREATE VIEW matter AS SELECT * FROM work_item;
 
+-- 公文。事项的主要表现载体之一（V3 §21）。
+--
+-- 机关里大部分"办事"其实是在办文：起草、核稿、会签、修改、签发、
+-- 编号、印发、签收、归档。一件事走到哪一步，看的是文走到哪一步。
+--
+-- 文种由年代规则控制：1986 年和 2026 年的文种不完全一样，
+-- 《国家行政机关公文处理办法》改过好几次。
+CREATE TABLE document (
+    id            INTEGER PRIMARY KEY,
+    matter_id     INTEGER REFERENCES work_item(id),
+    doc_type      TEXT NOT NULL,      -- 请示/报告/通知/通报/意见/函/批复/纪要/决定
+    title         TEXT NOT NULL,
+    drafter_org_id INTEGER REFERENCES organization(id),
+    drafter_id    INTEGER REFERENCES character(id),
+    issuer_org_id INTEGER REFERENCES organization(id),
+    signer_id     INTEGER REFERENCES character(id),
+    -- DRAFT 起草 / REVIEW 核稿 / COUNTERSIGN 会签 / REVISION 修改 /
+    -- SIGN 签发 / NUMBERING 编号 / ISSUED 印发 / RECEIVED 签收 / ARCHIVED 归档
+    status        TEXT NOT NULL DEFAULT 'DRAFT',
+    secrecy_level TEXT,               -- 无/内部/秘密/机密
+    doc_number    TEXT,               -- 平政发〔1987〕12号
+    created_date  TEXT NOT NULL,
+    issued_date   TEXT
+);
+CREATE INDEX idx_doc_matter ON document(matter_id);
+
+-- 公文流转的每一步。谁核的稿、谁会的签、谁签的发，都要有据可查。
+CREATE TABLE document_step (
+    id            INTEGER PRIMARY KEY,
+    document_id   INTEGER NOT NULL REFERENCES document(id),
+    step          TEXT NOT NULL,
+    character_id  INTEGER REFERENCES character(id),
+    organization_id INTEGER REFERENCES organization(id),
+    date          TEXT NOT NULL,
+    note          TEXT
+);
+
 -- 权限不按行政级别硬开关。
 --
 --     if rank >= 厅级:  开放会议        ← 错的

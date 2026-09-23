@@ -20,13 +20,14 @@ def test_请示对象顺着隶属关系往上一两级():
         "WHERE h.character_id=? AND h.end_date IS NULL", (pid,)).fetchone()[0]
     chain = set(actions._reporting_chain(con, mine, hops=2))
     for t in actions.targets_for(con, pid, "请示"):
-        org = con.execute(
+        # 查他的全部任职，不是只查主职——兼任的人正是以那个兼职的身份
+        # 坐在这个机关里。一个县长兼着县委常委，你向他请示的是常委那一头。
+        orgs = {r[0] for r in con.execute(
             "SELECT ps.organization_id FROM office_holding h "
             "JOIN position_slot ps ON ps.id = h.position_slot_id "
-            "WHERE h.character_id=? AND h.end_date IS NULL AND h.primary_position=1",
-            (t["id"],)).fetchone()
-        if org:
-            assert org[0] in chain, "%s 不在你的隶属链上" % t["name"]
+            "WHERE h.character_id=? AND h.end_date IS NULL", (t["id"],))}
+        if orgs:
+            assert orgs & chain, "%s 不在你的隶属链上" % t["name"]
 
 
 def test_起步不在人大政协():

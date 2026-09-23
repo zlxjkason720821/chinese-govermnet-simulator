@@ -174,6 +174,7 @@ def install(con, on):
             "ORDER BY d.protocol_order, s.id", (org["id"],)).fetchall()
         if len(deputies) < 2:
             continue
+        deputies = _rank(con, org["id"], deputies)
         for i, r in enumerate(deputies):
             con.execute("UPDATE position_slot SET leadership_order=? WHERE id=?",
                         (i + 1, r["id"]))
@@ -193,6 +194,43 @@ def install(con, on):
         changed.append((org["n"], executive_title(second["post"].lstrip("副"),
                                                   org["sys"], org["arch"]), why))
     return changed
+
+
+def _rank(con, org_id, slots):
+    """班子排序。
+
+    党委常委会有一条定例：书记之后排第二的是**同级政府正职**。
+    县长不一定兼副书记，但他在常委会里就是第二位——省、市、县都一样。
+
+    这个排名不是摆设：书记空缺时由排第二的主持工作，所以顺序错了，
+    主持工作的人就错了。
+    """
+    r = con.execute("SELECT organization_type, protocol_order FROM organization "
+                    "WHERE id=?", (org_id,)).fetchone()
+    if not r or r[0] != "PARTY" or r[1] is None:
+        return slots                    # 只有党委班子本身有这条定例
+    gov = con.execute(
+        "SELECT h2.character_id AS cid FROM office_holding h2 "
+        "JOIN position_slot s2 ON s2.id = h2.position_slot_id "
+        "JOIN organization o2 ON o2.id = s2.organization_id "
+        "JOIN position_definition d2 ON d2.id = s2.position_definition_id "
+        "WHERE h2.end_date IS NULL AND o2.organization_type='GOVERNMENT' "
+        "AND o2.protocol_order IS NOT NULL AND o2.admin_level = "
+        "  (SELECT admin_level FROM organization WHERE id=?) "
+        "AND d2.is_leadership=1 AND d2.protocol_order=1", (org_id,)).fetchone()
+    if gov is None:
+        return slots
+    held = {x["id"] for x in con.execute(
+        "SELECT s.id FROM office_holding h JOIN position_slot s "
+        "  ON s.id = h.position_slot_id "
+        "WHERE h.end_date IS NULL AND h.character_id=? AND s.organization_id=?",
+        (gov["cid"], org_id))}
+    if not held:
+        return slots
+    head = slots[:1]
+    mine = [x for x in slots[1:] if x["id"] in held]
+    rest = [x for x in slots[1:] if x["id"] not in held]
+    return head + mine + rest
 
 
 def assign_party_posts(con):
@@ -265,11 +303,11 @@ def full_title(con, holding_id):
     title = "、".join(parts)
     if r["pr"] and r["pr"] != r["lvl"]:
         title += "（%s）" % r["pr"]          # 高配：副主任（正部长级）
-    if r["ah"]:
-        title += "（主持工作）"
-    elif r["at"] == "SECONDMENT":
+    # 主持工作和兼任不是互斥的：县委书记空缺时，主持工作的正是
+    # 兼着县委副书记的县长。两样都要写出来，否则看不出是谁在主持。
+    if r["at"] == "SECONDMENT":
         title += "（挂职）"          # 有期限，不占实际班子序列
-    elif r["at"] == "CONCURRENT":
+    if r["at"] == "CONCURRENT":
         # 兼任写全：主职在前。"副县长、公安局党组书记、局长"
         main = con.execute(
             "SELECT COALESCE(o.short_name,o.name) || d.name FROM office_holding h "
@@ -280,7 +318,22 @@ def full_title(con, holding_id):
             "LIMIT 1", (r["cid"],)).fetchone()
         if main:
             title = main[0] + "、" + title
+    if r["ah"]:
+        title += "（主持工作）"
     return title
+
+
+def _acting_candidate(con, org_id):
+    """正职空缺时，谁来主持工作：班子里排第二的那位。
+
+    党委这边排第二的是同级政府正职（见 _rank）——县委书记空缺是
+    县长主持工作，依据是他在常委会里的排名，不是"他也是副书记"。
+    """
+    return con.execute(
+        "SELECT h.id, h.character_id FROM office_holding h "
+        "JOIN position_slot s ON s.id = h.position_slot_id "
+        "WHERE h.end_date IS NULL AND s.organization_id=? "
+        "AND s.leadership_order=2 AND h.acting_head=0", (org_id,)).fetchone()
 
 
 def acting_heads(con, on):
@@ -297,11 +350,7 @@ def acting_heads(con, on):
     if not vacancies:
         return out
     for org in vacancies:
-        r = con.execute(
-            "SELECT h.id, h.character_id FROM office_holding h "
-            "JOIN position_slot s ON s.id = h.position_slot_id "
-            "WHERE h.end_date IS NULL AND s.organization_id=? "
-            "AND s.leadership_order=2 AND h.acting_head=0", (org["org"],)).fetchone()
+        r = _acting_candidate(con, org["org"])
         if r is None:
             continue
         con.execute("UPDATE office_holding SET acting_head=1 WHERE id=?", (r["id"],))

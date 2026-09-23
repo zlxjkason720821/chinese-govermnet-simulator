@@ -683,6 +683,42 @@ class Game:
         """§58 任务窗口：待办事项。"""
         return tasks.pending(self.con, self.player_id, self.clock.date)
 
+    def appraisal(self, character_id=None):
+        """人物评价的十五个维度（V3 §24）。
+
+        每一项都从记录里算出来，并带着依据。没有总分——
+        研判要看的是哪一项强、哪一项弱、哪一项根本没有记录。
+        """
+        from gongpu import appraisal as ap
+        cid = character_id or self.player_id
+        return {"维度": ap.of(self.con, cid, self.clock.date),
+                "研判": ap.brief(self.con, cid, self.clock.date)}
+
+    def documents(self, character_id=None):
+        """和这个人有关的公文：他起草的、他核的、他签发的。"""
+        from gongpu import documents as doc
+        return doc.listing(self.con, character_id or self.player_id)
+
+    def document_trail(self, did):
+        from gongpu import documents as doc
+        return doc.trail(self.con, did)
+
+    def project_detail(self, pid):
+        """项目全貌：十二项指标 + 决策链。"""
+        from gongpu import projects as pj
+        p = self.con.execute("SELECT * FROM project WHERE id=?", (pid,)).fetchone()
+        if p is None:
+            return None
+        return {"项目": dict(p), "环节": pj.STATE_CN.get(p["state"], p["state"]),
+                "指标": pj.indicators(self.con, pid),
+                "决策链": pj.history(self.con, pid),
+                "经手人": pj.decisions(self.con, pid)}
+
+    def capabilities(self):
+        """你这个岗位能做什么。§57：把制度上的理由摆出来。"""
+        from gongpu import caps
+        return caps.describe(self.con, self.player_id)
+
     def central_path(self):
         """到中央去的两条轴：行政级别和党内身份。
 

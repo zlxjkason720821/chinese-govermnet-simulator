@@ -166,6 +166,8 @@ by_post:
 
   # 政府正职：政府全体会议、常务会议，主持。
   县长: &gov_head
+    - {cap: DOCUMENT_SIGN, scope: UNIT}
+    - {cap: DOCUMENT_ISSUE, scope: UNIT}
     - {cap: MATTER_VIEW, scope: JURISDICTION}
     - {cap: MATTER_ASSIGN, scope: JURISDICTION}
     - {cap: MATTER_APPROVE, scope: JURISDICTION}
@@ -197,8 +199,13 @@ by_post:
     - {cap: PERSONNEL_VOTE, scope: JURISDICTION}
     - {cap: PROJECT_VIEW, scope: JURISDICTION}
 
-  # 党委正职：主持常委会、全会，签发纪要。
+  # 党委正职、部门正职。"书记"这个职务名两边都用：县委书记是党委正职，
+  # 纪委书记、政法委书记是部门正职。两种都要能签发本机关的文——
+  # 一个机关连签发的人都没有，文就永远发不出去。
   书记:
+    - {cap: DOCUMENT_SIGN, scope: UNIT}
+    - {cap: DOCUMENT_ISSUE, scope: UNIT}
+    - {cap: MATTER_ASSIGN, scope: UNIT}
     - {cap: MATTER_VIEW, scope: JURISDICTION}
     - {cap: MATTER_APPROVE, scope: JURISDICTION}
     - {cap: MEETING_CHAIR, scope: JURISDICTION}

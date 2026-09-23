@@ -200,6 +200,8 @@ class Main(QMainWindow):
         self._build_school()
         self._build_relations()
         self._build_projects()
+        self._build_documents()
+        self._build_appraisal()
         self._build_meetings()
         self._build_central()
         self._build_bodies()
@@ -766,7 +768,8 @@ class Main(QMainWindow):
         h.setObjectName("hint"); h.setWordWrap(True)
         lay.addWidget(h)
         split = QSplitter(Qt.Horizontal)
-        self.proj_table = make_table(["项目", "承办单位", "阶段", "体量", "动议", "结项"])
+        self.proj_table = make_table(["项目", "地域", "领域", "承办单位", "环节",
+                                      "投资（万元）", "动议", "结项"])
         self.proj_table.currentCellChanged.connect(
             lambda *_: self._refresh_trail())
         split.addWidget(self.proj_table)
@@ -775,7 +778,14 @@ class Main(QMainWindow):
         tl = QLabel("决策留痕"); tl.setObjectName("sectionTitle")
         rl.addWidget(tl)
         self.trail_table = make_table(["环节", "日期", "经手人", "当时职务"])
-        rl.addWidget(self.trail_table)
+        rl.addWidget(self.trail_table, 1)
+        # 十二项指标。不能只有一个"政绩值"——它们互相冲突：
+        # 赶工期质量和安全就往下走，压成本后续运营负担就往上走。
+        il = QLabel("结果指标"); il.setObjectName("sectionTitle")
+        rl.addWidget(il)
+        self.ind_table = make_table(["指标", "值", "指标", "值"])
+        self.ind_table.setMaximumHeight(210)
+        rl.addWidget(self.ind_table)
         self.trail_note = QLabel(); self.trail_note.setObjectName("hint")
         self.trail_note.setWordWrap(True)
         rl.addWidget(self.trail_note)
@@ -794,8 +804,90 @@ class Main(QMainWindow):
         fill(self.trail_table,
              [(d["role"], d["date"], d["name"], d["title_then"] or "—")
               for d in self.game.project_trail(p["id"])])
+        d = self.game.project_detail(p["id"])
+        ind = d["指标"] if d else []
+        rows = []
+        for a in range(0, len(ind), 2):
+            b = ind[a + 1] if a + 1 < len(ind) else None
+            rows.append((ind[a]["指标"], ind[a]["值"],
+                         b["指标"] if b else "", b["值"] if b else ""))
+        fill(self.ind_table, rows,
+             colors=lambda r, c: (
+                 WARN if c in (1, 3) and rows[r][c] != "" and
+                 ((rows[r][c - 1] in ("审计风险", "廉政风险", "后续运营负担",
+                                      "财政压力", "协调难度") and rows[r][c] >= 60)
+                  or (rows[r][c - 1] not in ("审计风险", "廉政风险", "后续运营负担",
+                                             "财政压力", "协调难度", "进度")
+                      and rows[r][c] < 40))
+                 else None))
         self.trail_note.setText(
-            "这些记录不会消失。项目结项之后，它们是审计和巡视唯一能凭的东西。")
+            "决策链不会消失：项目结项之后，它是审计和巡视唯一能凭的东西。"
+            "十二项指标互相冲突——赶工期质量和安全就往下走，"
+            "压成本后续运营负担就往上走。没有哪个方向是全赢的。")
+
+    # ---------- 公文 ----------
+
+    def _build_documents(self):
+        page = QWidget(); lay = QVBoxLayout(page)
+        lay.setContentsMargins(18, 14, 18, 14)
+        t = QLabel("公文"); t.setObjectName("sectionTitle")
+        lay.addWidget(t)
+        h = QLabel("机关里大部分事务其实都是在办文。一件事走到哪一步，"
+                   "看的是文走到哪一步：起草、核稿、会签、修改、签发、编号、"
+                   "印发、签收、归档。每一步都要有对得上权限的人——"
+                   "自己写自己核，那道程序就是空的。")
+        h.setObjectName("hint"); h.setWordWrap(True)
+        lay.addWidget(h)
+        split = QSplitter(Qt.Horizontal)
+        self.doc_table = make_table(["文种", "标题", "文号", "状态", "密级", "成文"])
+        self.doc_table.currentCellChanged.connect(lambda *_: self._refresh_doc())
+        split.addWidget(self.doc_table)
+        right = QWidget(); rl = QVBoxLayout(right)
+        rl.setContentsMargins(12, 0, 0, 0)
+        dl = QLabel("流转过程"); dl.setObjectName("sectionTitle")
+        rl.addWidget(dl)
+        self.doc_trail = make_table(["环节", "日期", "经手人", "备注"])
+        rl.addWidget(self.doc_trail)
+        split.addWidget(right)
+        split.setSizes([700, 480])
+        lay.addWidget(split, 1)
+        self.tabs.addTab(page, "公文")
+
+    def _refresh_doc(self):
+        i = self.doc_table.currentRow()
+        if not (0 <= i < len(self._docs)):
+            fill(self.doc_trail, [])
+            return
+        from gongpu.documents import STEP_CN
+        fill(self.doc_trail,
+             [(STEP_CN.get(t["step"], t["step"]), t["date"],
+               t["name"] or "—", t["note"] or "")
+              for t in self.game.document_trail(self._docs[i]["id"])])
+
+    # ---------- 评价 ----------
+
+    def _build_appraisal(self):
+        page = QWidget(); lay = QVBoxLayout(page)
+        lay.setContentsMargins(18, 14, 18, 14)
+        t = QLabel("评价"); t.setObjectName("sectionTitle")
+        lay.addWidget(t)
+        h = QLabel("这十五项不是隐藏分，是从记录里算出来的，所以每一项都写着"
+                   "依据——办结了几件、逾期了几件、几次失当、经手过几个项目。"
+                   "没有总分：组织部门研判要看的是哪一项强、哪一项弱、"
+                   "哪一项根本没有记录，不是一个能拿来排序的数。")
+        h.setObjectName("hint"); h.setWordWrap(True)
+        lay.addWidget(h)
+        self.ap_brief = QLabel(); self.ap_brief.setObjectName("fieldVal")
+        self.ap_brief.setWordWrap(True)
+        lay.addWidget(self.ap_brief)
+        self.ap_table = make_table(["维度", "刻度", "依据"])
+        lay.addWidget(self.ap_table, 1)
+        cl = QLabel("你这个岗位能做什么"); cl.setObjectName("sectionTitle")
+        lay.addWidget(cl)
+        self.cap_table = make_table(["事项", "范围"])
+        self.cap_table.setMaximumHeight(200)
+        lay.addWidget(self.cap_table)
+        self.tabs.addTab(page, "评价")
 
     # ---------- 会议 ----------
 
@@ -1091,6 +1183,30 @@ class Main(QMainWindow):
         for i, r in enumerate(roster):
             self.central_grid.addWidget(self._central_card(r, year), i // 4, i % 4)
 
+        self._docs = g.documents()
+        fill(self.doc_table,
+             [(d["doc_type"], d["title"], d["doc_number"] or "—",
+               __import__("gongpu.documents", fromlist=["STEP_CN"]).STEP_CN.get(
+                   d["status"], d["status"]),
+               d["secrecy_level"] or "—", d["issued_date"] or "—")
+              for d in self._docs])
+        if self._docs and self.doc_table.currentRow() < 0:
+            self.doc_table.setCurrentCell(0, 0)
+        self._refresh_doc()
+
+        ap = g.appraisal()
+        self.ap_brief.setText("研判：" + ap["研判"])
+        dims = ap["维度"]
+        fill(self.ap_table,
+             [(d["维度"], "—" if d["值"] is None else d["值"], d["依据"])
+              for d in dims],
+             colors=lambda r, c: (
+                 MUTED if c == 1 and dims[r]["值"] is None else
+                 (WARN if c == 1 and dims[r]["code"] in
+                  ("discipline_risk", "error_record") and (dims[r]["值"] or 0) > 0
+                  else None)))
+        fill(self.cap_table, [(c["说明"], c["范围"]) for c in g.capabilities()])
+
         cp = g.central_path()
         NL2 = chr(10)
         self.cpath_body.setText(NL2.join(
@@ -1125,11 +1241,12 @@ class Main(QMainWindow):
                str(r["gov"]) if r["gov"] is not None else "—") for r in rl])
 
         self._projects = g.projects()
+        _PJ = __import__("gongpu.projects", fromlist=["STATE_CN"])
         fill(self.proj_table,
-             [(p["name"], p["org"] or "—",
-               __import__("gongpu.projects", fromlist=["STATE_CN"]).STATE_CN.get(
-                   p["state"], p["state"]),
-               "★" * p["scale"], p["proposed_date"], p["closed_date"] or "—")
+             [(p["name"], p.get("region") or "—", p.get("policy_domain") or "—",
+               p["org"] or "—", _PJ.STATE_CN.get(p["state"], p["state"]),
+               p.get("investment") or "—",
+               p["proposed_date"], p["closed_date"] or "—")
               for p in self._projects])
         if self._projects and self.proj_table.currentRow() < 0:
             self.proj_table.setCurrentCell(0, 0)

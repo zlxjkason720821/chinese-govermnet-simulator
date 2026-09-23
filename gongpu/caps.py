@@ -53,31 +53,45 @@ def install(con):
     return con.execute("SELECT count(*) FROM position_capability").fetchone()[0]
 
 
-def of(con, cid):
+def of(con, cid, org_id=None):
     """这个人现在有哪些权限。返回 {权限: 最大范围}。
 
     兼任也算：一个人兼着县委常委和组织部长，两边的权限都有。
+
+    但 org_id 给了的时候只算**在这个单位**的权限。这一条很要紧：
+    一个人当着纪委副书记，同时兼着检察院检察长——他能签发检察院的文，
+    不等于他能签发纪委的文。签发权跟着你在哪个单位任职，
+    不是把所有头衔的权限并起来。
+
+    UNIT 范围的权限只在本单位算数；SUBORDINATE、JURISDICTION 管得更宽，
+    所以在下属单位和本辖区也算数。
     """
     out = {}
-    rows = con.execute(
-        "SELECT pc.capability_code AS cap, pc.scope AS scope "
-        "FROM office_holding h "
-        "JOIN position_slot s ON s.id = h.position_slot_id "
-        "JOIN organization o ON o.id = s.organization_id "
-        "JOIN position_capability pc "
-        "  ON pc.position_definition_id = s.position_definition_id "
-        "  OR pc.archetype = o.archetype "
-        "WHERE h.character_id=? AND h.end_date IS NULL", (cid,)).fetchall()
-    for r in rows:
+    sql = ("SELECT pc.capability_code AS cap, pc.scope AS scope, "
+           " s.organization_id AS org "
+           "FROM office_holding h "
+           "JOIN position_slot s ON s.id = h.position_slot_id "
+           "JOIN organization o ON o.id = s.organization_id "
+           "JOIN position_capability pc "
+           "  ON pc.position_definition_id = s.position_definition_id "
+           "  OR pc.archetype = o.archetype "
+           "WHERE h.character_id=? AND h.end_date IS NULL")
+    for r in con.execute(sql, (cid,)).fetchall():
+        if org_id is not None and r["org"] != org_id                 and SCOPE_ORDER.get(r["scope"], 0) < SCOPE_ORDER["SUBORDINATE"]:
+            continue
         cur = out.get(r["cap"])
         if cur is None or SCOPE_ORDER.get(r["scope"], 0) > SCOPE_ORDER.get(cur, 0):
             out[r["cap"]] = r["scope"]
     return out
 
 
-def has(con, cid, code, scope=None):
-    """有没有这项权限。scope 给了就还要够得着那么大范围。"""
-    got = of(con, cid).get(code)
+def has(con, cid, code, scope=None, org_id=None):
+    """有没有这项权限。
+
+    scope 给了就还要够得着那么大范围；
+    org_id 给了就只算他在这个单位的身份带来的权限。
+    """
+    got = of(con, cid, org_id).get(code)
     if got is None:
         return False
     if scope is None:

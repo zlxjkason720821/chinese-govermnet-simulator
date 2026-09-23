@@ -245,3 +245,86 @@ def test_办公厅的人是会务工作人员不是列席():
     if staff:
         assert meetings.player_role(con, staff["cid"], m["id"]) in (
             "工作人员", "与会", "主持", "列席")
+
+
+def test_政府正职在党委常委会里排第二():
+    """县长不一定兼副书记，但他在常委会里的排名是第二。
+    省、市、县都是这个逻辑。"""
+    con, _, _, _ = new_game(seed="常委排名")
+    for party, gov in (("中共红山县委", "红山县人民政府"),
+                       ("中共平州市委", "平州市人民政府"),
+                       ("中共河北省委", "河北省人民政府")):
+        org = con.execute("SELECT id FROM organization "
+                          "WHERE COALESCE(short_name,name)=?", (party,)).fetchone()
+        r = con.execute(
+            "SELECT h.character_id AS cid FROM office_holding h "
+            "JOIN position_slot s ON s.id = h.position_slot_id "
+            "WHERE h.end_date IS NULL AND s.organization_id=? "
+            "AND s.leadership_order=2", (org["id"],)).fetchone()
+        if r is None:
+            continue
+        # 排第二的那位，另一个身份是同级政府正职
+        titles = [x[0] for x in con.execute(
+            "SELECT h.title_at_time FROM office_holding h "
+            "WHERE h.character_id=? AND h.end_date IS NULL", (r["cid"],))]
+        assert any(gov in (t or "") for t in titles), \
+            "%s 常委会排第二的应当是%s正职：%s" % (party, gov, titles)
+
+
+def test_县长不必是副书记():
+    """兼的是常委，不是副书记——这两件事不能混。"""
+    con, _, _, _ = new_game(seed="不是副书记")
+    r = con.execute(
+        "SELECT h.title_at_time AS t FROM office_holding h "
+        "JOIN character c ON c.id = h.character_id "
+        "WHERE h.appointment_type='CONCURRENT' AND h.end_date IS NULL "
+        "AND c.id IN (SELECT h2.character_id FROM office_holding h2 "
+        "  JOIN position_slot s2 ON s2.id = h2.position_slot_id "
+        "  JOIN position_definition d2 ON d2.id = s2.position_definition_id "
+        "  WHERE h2.end_date IS NULL AND d2.name='县长')").fetchall()
+    for x in r:
+        assert "副书记" not in (x["t"] or ""), x["t"]
+
+
+def test_书记空缺由排第二的主持工作():
+    from datetime import date as _d
+    con, _, clock, _ = new_game(seed="主持")
+    org = con.execute("SELECT id FROM organization "
+                      "WHERE COALESCE(short_name,name)='中共红山县委'").fetchone()["id"]
+    con.execute("UPDATE position_slot SET status='VACANT',holder_id=NULL "
+                "WHERE organization_id=? AND leadership_order=1", (org,))
+    con.execute("UPDATE office_holding SET end_date=? WHERE end_date IS NULL "
+                "AND position_slot_id IN (SELECT id FROM position_slot "
+                "  WHERE organization_id=? AND leadership_order=1)",
+                (clock.date.isoformat(), org))
+    assert leadership.acting_heads(con, clock.date)
+    h = con.execute(
+        "SELECT h.id FROM office_holding h "
+        "JOIN position_slot s ON s.id = h.position_slot_id "
+        "WHERE h.end_date IS NULL AND s.organization_id=? AND h.acting_head=1",
+        (org,)).fetchone()
+    t = leadership.full_title(con, h["id"])
+    assert "主持工作" in t
+    assert "县长" in t, "主持工作的该是县长：%s" % t
+
+
+def test_兼任和主持工作要同时写出来():
+    """县委书记空缺时主持工作的正是兼着常委的县长，两样都要看得见。"""
+    from datetime import date as _d
+    con, _, clock, _ = new_game(seed="两样都写")
+    org = con.execute("SELECT id FROM organization "
+                      "WHERE COALESCE(short_name,name)='中共红山县委'").fetchone()["id"]
+    con.execute("UPDATE position_slot SET status='VACANT',holder_id=NULL "
+                "WHERE organization_id=? AND leadership_order=1", (org,))
+    con.execute("UPDATE office_holding SET end_date=? WHERE end_date IS NULL "
+                "AND position_slot_id IN (SELECT id FROM position_slot "
+                "  WHERE organization_id=? AND leadership_order=1)",
+                (clock.date.isoformat(), org))
+    leadership.acting_heads(con, clock.date)
+    h = con.execute(
+        "SELECT h.id FROM office_holding h "
+        "JOIN position_slot s ON s.id = h.position_slot_id "
+        "WHERE h.end_date IS NULL AND s.organization_id=? AND h.acting_head=1",
+        (org,)).fetchone()
+    t = leadership.full_title(con, h["id"])
+    assert "、" in t and "主持工作" in t, t

@@ -11,7 +11,8 @@ from datetime import date, timedelta
 
 from gongpu import (actions, discipline, projects, ranks, relations, scheduler,
                     tasks, training)
-from gongpu import central, leadership, meetings, proranks, secretary
+from gongpu import (central, documents, leadership, meetings, proranks,
+                    secretary)
 from gongpu.appointment import (AppointmentProcess, ProcedureError, STATES,
                                 _age, log_event)
 from gongpu.db import title_of
@@ -476,6 +477,10 @@ def tick(con, on, rng, rules):
     # 事项有客观时限，到点没办就是逾期，不需要谁来裁量
     if tasks.sweep_overdue(con, on):
         changed = True
+    # 办事就是办文。在办的公文每天往下推一步——
+    # 推得动的条件是有人对得上那一步要的权限。
+    if on.day % 5 == 0:
+        documents.run(con, on, rng)
     # 领导动了，秘书按级别安排出路。跟人走是错的：秘书不会跟着领导
     # 到新单位去，他会被放到地方上当主政官员。（蓝图十二）
     if on.day == 1 and secretary.settle(con, on):

@@ -398,6 +398,15 @@ slots:
 #
 # 普通的民政局、统计局没有这种安排，所以也不该有常务副局长。
 concurrent:
+  #  政府正职进同级党委常委会。注意：**县长不一定是副书记**，
+  #  但他在常委会里的排名是第二——书记之后就是他。
+  #  各级政府都是这个逻辑，省长、市长同理。
+  #
+  #  这个排名有结构性后果：党委书记空缺的时候，主持工作的是县长，
+  #  依据是他在常委会里排第二，不是"他也是副书记"。
+  - {holder: {org: xianzf,  pos: xzh},      also: {org: xianwei, pos: changwei}}
+  - {holder: {org: shizf,   pos: shizhang}, also: {org: shiwei,  pos: swcw}}
+  - {holder: {org: shengzf, pos: shengzhang}, also: {org: shengwei, pos: sw_cw}}
   - {holder: {org: xianwei, pos: changwei}, also: {org: zzb,    pos: buzh}}
   - {holder: {org: xianwei, pos: changwei}, also: {org: xcb,    pos: buzh}}
   - {holder: {org: xianwei, pos: changwei}, also: {org: jiwei,  pos: jwsj}}
