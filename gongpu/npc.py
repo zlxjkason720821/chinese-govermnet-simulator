@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 from gongpu import (actions, discipline, projects, ranks, relations, scheduler,
                     tasks, training)
-from gongpu import central, leadership, meetings, secretary
+from gongpu import central, leadership, meetings, proranks, secretary
 from gongpu.appointment import (AppointmentProcess, ProcedureError, STATES,
                                 _age, log_event)
 from gongpu.db import title_of
@@ -483,9 +483,16 @@ def tick(con, on, rng, rules):
         # 主持工作每月看一次（位子空了就得有人顶）；
         # 班子排序和党内职务一年重排一次就够——每月扫全部机构太贵。
         leadership.acting_heads(con, on)
+        proranks.finish(con, on)          # 挂职到期，回原单位
+        proranks.revoke_on_transfer(con, on)   # 调离本系统的撤衔
         if on.month == 1:
             leadership.install(con, on)
             leadership.assign_party_posts(con)
+            # 专业序列一年评一次。1992 年才有警衔，1997 年才评法官检察官等级，
+            # 在那之前这一步什么也不做。
+            proranks.grant(con, on)
+            proranks.grant_high_rank(con, on, rng["world"])
+            proranks.start(con, on, rng["world"])
     _keep_supplied(con, on, rng)
     if (on.month, on.day) == (12, 31):         # 年度考核
         actions.annual_assessment(con, on, rng, rules)

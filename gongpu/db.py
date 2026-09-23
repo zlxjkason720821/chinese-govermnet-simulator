@@ -106,9 +106,26 @@ CREATE TABLE position_slot (
     -- 所以它不是每个机关都有的固定槽位——它出现在"一把手高配、兼任、
     -- 还担着更高层职务"的机关里。
     executive_deputy INTEGER NOT NULL DEFAULT 0,
+    -- 挂职用的临时岗位：有期限，到期撤销，不占本机关的实际编制序列。
+    temporary     INTEGER NOT NULL DEFAULT 0,
     -- 班子排序。同为副职，党组副书记那一位和最后一位不是一回事。
     leadership_order INTEGER
 );
+
+-- 专业序列：警衔、法官等级、检察官等级。
+-- 这三样和行政级别是两条线，绝不能合并——
+-- 一个正科级的公安局长有警衔，一个正科级的民政局长没有。
+-- 而且各有设立年代：警衔 1992 年，法官检察官等级 1997 年。
+CREATE TABLE professional_rank (
+    id            INTEGER PRIMARY KEY,
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    kind          TEXT NOT NULL,
+    grade         TEXT NOT NULL,
+    start_date    TEXT NOT NULL,
+    end_date      TEXT,
+    exit_reason   TEXT
+);
+CREATE INDEX idx_prof_rank ON professional_rank(character_id, end_date);
 
 -- §20 任职历史。同一人可并存多条 = 兼任。
 CREATE TABLE office_holding (

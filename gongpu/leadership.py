@@ -169,7 +169,8 @@ def install(con, on):
             "SELECT s.id, d.name AS post, d.protocol_order AS po "
             "FROM position_slot s "
             "JOIN position_definition d ON d.id = s.position_definition_id "
-            "WHERE s.organization_id=? AND d.is_leadership=1 "
+            # 挂职是临时增设的岗位，不进班子序列
+            "WHERE s.organization_id=? AND d.is_leadership=1 AND s.temporary=0 "
             "ORDER BY d.protocol_order, s.id", (org["id"],)).fetchall()
         if len(deputies) < 2:
             continue
@@ -267,7 +268,7 @@ def full_title(con, holding_id):
     if r["ah"]:
         title += "（主持工作）"
     elif r["at"] == "SECONDMENT":
-        title += "（挂职）"
+        title += "（挂职）"          # 有期限，不占实际班子序列
     elif r["at"] == "CONCURRENT":
         # 兼任写全：主职在前。"副县长、公安局党组书记、局长"
         main = con.execute(
