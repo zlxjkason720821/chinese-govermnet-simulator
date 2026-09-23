@@ -1,0 +1,260 @@
+# 事项模板库（V3 §16 通用 + §17 专业机关）
+#
+# 原来全县上下只有六种事：信访、材料、督办、调研、协调、应急。
+# 于是组织部的科员和公安局的科员，手上的活看起来一模一样。
+#
+# 现实不是这样。组织部办的是干部考察、班子研判、换届；
+# 公安局办的是治安事件、专项行动、大型活动安保；
+# 办公厅办的是会务、批示流转、值班信息。
+# 同样是"科员"，两个人每天打开桌面看到的东西完全不同。
+#
+# 每条模板挂一个 kind，指向 work_items.yaml 里那六类判定档——
+# 判定规则不变（哪些办法管用、哪些是走过场、哪些是失当），
+# 变的是事项本身的来源、名目和归属。
+#
+# levels 限定哪些层次的人会摊上这件事：
+#   科员      具体经办
+#   副科级    科室副职
+#   正科级    科室正职、小单位一把手
+#   副处级    县级领导、部门主官
+#   正处级    县级正职
+# 不写就是各级都有可能。
+#
+# matter_type 对应 Matter 模型里的类型，决定这件事走哪条流程、进哪种会。
+
+# ── 通用事项族（§16）──────────────────────────────────
+# 这些是大量机关共享的底子。任何机关的人都可能摊上。
+common:
+  上级部署与报送:
+    - {t: 贯彻上级会议精神, kind: 材料, type: INSTRUCTION, days: 15}
+    - {t: 分解上级年度重点任务, kind: 材料, type: INSTRUCTION, days: 20,
+       levels: [正科级, 副处级]}
+    - {t: 报送阶段性进展, kind: 材料, type: REPORT, days: 10}
+    - {t: 报送年度总结, kind: 材料, type: REPORT, days: 20}
+    - {t: 报送问题清单, kind: 材料, type: REPORT, days: 12}
+    - {t: 报送统计数据, kind: 材料, type: REPORT, days: 7}
+    - {t: 回复上级征求意见, kind: 材料, type: DOCUMENT, days: 10}
+    - {t: 配合上级调研, kind: 调研, type: INVESTIGATION, days: 15}
+    - {t: 接受上级督查, kind: 督办, type: SUPERVISION, days: 20,
+       levels: [正科级, 副处级, 正处级]}
+    - {t: 落实领导批示, kind: 督办, type: INSTRUCTION, days: 12}
+    - {t: 落实会议决定, kind: 督办, type: SUPERVISION, days: 25}
+    - {t: 落实审计整改要求, kind: 督办, type: AUDIT, days: 30,
+       levels: [正科级, 副处级]}
+
+  公文:
+    - {t: 审核请示, kind: 材料, type: DOCUMENT, days: 5}
+    - {t: 办理下级请示, kind: 材料, type: DOCUMENT, days: 8,
+       levels: [正科级, 副处级]}
+    - {t: 办理上级来文, kind: 材料, type: DOCUMENT, days: 7}
+    - {t: 形成情况报告, kind: 材料, type: REPORT, days: 10}
+    - {t: 形成专题报告, kind: 材料, type: REPORT, days: 15}
+    - {t: 起草请示稿, kind: 材料, type: DOCUMENT, days: 8}
+    - {t: 部门会签, kind: 协调, type: COORDINATION, days: 10}
+    - {t: 核对政策依据, kind: 材料, type: DOCUMENT, days: 5, levels: [科员, 副科级]}
+
+  调研:
+    - {t: 基层调研, kind: 调研, type: INVESTIGATION, days: 20}
+    - {t: 专项调研, kind: 调研, type: INVESTIGATION, days: 25}
+    - {t: 形成调研报告, kind: 材料, type: REPORT, days: 18}
+    - {t: 收集基层问题, kind: 调研, type: INVESTIGATION, days: 15}
+    - {t: 形成政策建议, kind: 材料, type: POLICY, days: 20,
+       levels: [正科级, 副处级, 正处级]}
+    - {t: 领导调研准备, kind: 材料, type: ROUTINE, days: 7}
+
+  督查督办:
+    - {t: 上级督办事项, kind: 督办, type: SUPERVISION, days: 15}
+    - {t: 领导批示督办, kind: 督办, type: INSTRUCTION, days: 12}
+    - {t: 重点项目督办, kind: 督办, type: PROJECT, days: 20,
+       levels: [正科级, 副处级]}
+    - {t: 逾期事项催办, kind: 督办, type: SUPERVISION, days: 8}
+
+  协调:
+    - {t: 跨部门事项协调, kind: 协调, type: COORDINATION, days: 18}
+    - {t: 历史遗留问题化解, kind: 协调, type: COORDINATION, days: 40,
+       levels: [正科级, 副处级]}
+    - {t: 部门职责争议协调, kind: 协调, type: COORDINATION, days: 25,
+       levels: [副处级, 正处级]}
+    - {t: 重点企业诉求协调, kind: 协调, type: COORDINATION, days: 20}
+
+  年度与周期事务:
+    - {t: 年度工作计划编制, kind: 材料, type: PLANNING, days: 25}
+    - {t: 年度考核组织, kind: 材料, type: ROUTINE, days: 20,
+       levels: [正科级, 副处级]}
+    - {t: 预算编制, kind: 材料, type: BUDGET, days: 30,
+       levels: [正科级, 副处级]}
+    - {t: 半年工作总结, kind: 材料, type: REPORT, days: 15}
+
+  群众与基层:
+    - {t: 群众来访, kind: 信访, type: PETITION, days: 20}
+    - {t: 重复信访化解, kind: 信访, type: PETITION, days: 30}
+    - {t: 领导接访, kind: 信访, type: PETITION, days: 10,
+       levels: [副处级, 正处级]}
+    - {t: 基层反映的困难, kind: 协调, type: PETITION, days: 25}
+
+  内部机关管理:
+    - {t: 机关作风整顿, kind: 材料, type: ROUTINE, days: 20,
+       levels: [正科级, 副处级]}
+    - {t: 干部职工谈心谈话, kind: 材料, type: ROUTINE, days: 15,
+       levels: [副科级, 正科级, 副处级]}
+    - {t: 办公用房和经费核查, kind: 材料, type: AUDIT, days: 15}
+
+# ── 专业机关事项（§17）────────────────────────────────
+# 同样是科员，组织部的和公安局的打开桌面看到的东西完全不同。
+by_archetype:
+  PARTY_OFFICE:
+    - {t: 常委会会务, kind: 材料, type: ROUTINE, days: 5}
+    - {t: 全会议题准备, kind: 材料, type: PLANNING, days: 20,
+       levels: [正科级, 副处级]}
+    - {t: 领导公务活动协调, kind: 协调, type: COORDINATION, days: 5}
+    - {t: 重要批示流转, kind: 督办, type: INSTRUCTION, days: 3}
+    - {t: 紧急信息报送, kind: 应急, type: REPORT, days: 2}
+    - {t: 重要文稿起草, kind: 材料, type: DOCUMENT, days: 12}
+    - {t: 会议纪要起草, kind: 材料, type: DOCUMENT, days: 5}
+    - {t: 机要文件流转, kind: 材料, type: DOCUMENT, days: 3, secrecy: 60}
+    - {t: 跨部门综合协调, kind: 协调, type: COORDINATION, days: 15}
+    - {t: 值班信息, kind: 应急, type: ROUTINE, days: 2}
+
+  GOV_OFFICE:
+    - {t: 常务会议会务, kind: 材料, type: ROUTINE, days: 5}
+    - {t: 政府全体会准备, kind: 材料, type: PLANNING, days: 15,
+       levels: [正科级, 副处级]}
+    - {t: 政府公文运转, kind: 材料, type: DOCUMENT, days: 4}
+    - {t: 政府领导批示督办, kind: 督办, type: INSTRUCTION, days: 10}
+    - {t: 重大事项协调, kind: 协调, type: COORDINATION, days: 20}
+    - {t: 政务信息报送, kind: 材料, type: REPORT, days: 5}
+    - {t: 值班应急信息, kind: 应急, type: EMERGENCY, days: 2}
+    - {t: 部门请示流转, kind: 材料, type: DOCUMENT, days: 6}
+    - {t: 人大建议政协提案办理, kind: 材料, type: REPORT, days: 40}
+
+  ORGANIZATION_DEPT:
+    - {t: 领导班子分析研判, kind: 材料, type: PERSONNEL, days: 25,
+       levels: [正科级, 副处级], secrecy: 70}
+    - {t: 干部考察, kind: 调研, type: PERSONNEL, days: 20, secrecy: 60}
+    - {t: 干部推荐工作组织, kind: 协调, type: PERSONNEL, days: 15}
+    - {t: 干部档案审核, kind: 材料, type: PERSONNEL, days: 15, levels: [科员, 副科级]}
+    - {t: 年度考核组织, kind: 材料, type: ROUTINE, days: 25}
+    - {t: 干部教育培训安排, kind: 协调, type: ROUTINE, days: 20}
+    - {t: 党校培训名额分配, kind: 协调, type: PERSONNEL, days: 12}
+    - {t: 干部交流方案, kind: 材料, type: PERSONNEL, days: 30,
+       levels: [正科级, 副处级], secrecy: 60}
+    - {t: 换届人事准备, kind: 材料, type: PERSONNEL, days: 45,
+       levels: [正科级, 副处级], secrecy: 75}
+    - {t: 干部监督工作, kind: 督办, type: PERSONNEL, days: 20}
+    - {t: 机构领导职数核对, kind: 材料, type: ROUTINE, days: 10}
+
+  PROPAGANDA_DEPT:
+    - {t: 理论学习中心组安排, kind: 协调, type: ROUTINE, days: 10}
+    - {t: 重大主题宣传, kind: 协调, type: POLICY, days: 25}
+    - {t: 新闻发布协调, kind: 协调, type: COORDINATION, days: 5}
+    - {t: 突发事件舆情应对, kind: 应急, type: PUBLIC_OPINION, days: 3}
+    - {t: 文明建设工作, kind: 材料, type: ROUTINE, days: 30}
+    - {t: 意识形态工作责任落实, kind: 督办, type: POLICY, days: 25,
+       levels: [正科级, 副处级]}
+
+  UNITED_FRONT_DEPT:
+    - {t: 民主党派联络, kind: 协调, type: COORDINATION, days: 20}
+    - {t: 民族宗教事务, kind: 协调, type: COORDINATION, days: 25}
+    - {t: 非公有制经济人士工作, kind: 调研, type: INVESTIGATION, days: 20}
+    - {t: 党外代表人士安排, kind: 材料, type: PERSONNEL, days: 30,
+       levels: [正科级, 副处级]}
+    - {t: 侨务工作, kind: 协调, type: COORDINATION, days: 20}
+
+  POLITICAL_LEGAL_COMMITTEE:
+    - {t: 社会治安形势分析, kind: 材料, type: REPORT, days: 15}
+    - {t: 政法队伍建设, kind: 材料, type: ROUTINE, days: 30}
+    - {t: 矛盾纠纷排查化解, kind: 协调, type: COORDINATION, days: 25}
+    - {t: 重大案件协调, kind: 协调, type: COORDINATION, days: 20,
+       levels: [正科级, 副处级], secrecy: 60}
+    - {t: 平安建设考评, kind: 督办, type: SUPERVISION, days: 30}
+
+  DISCIPLINE_SUPERVISION:
+    - {t: 信访举报受理, kind: 信访, type: DISCIPLINE, days: 20, secrecy: 70}
+    - {t: 问题线索处置, kind: 督办, type: DISCIPLINE, days: 30, secrecy: 85}
+    - {t: 廉政教育, kind: 材料, type: ROUTINE, days: 20}
+    - {t: 作风问题专项检查, kind: 督办, type: INSPECTION, days: 25}
+    - {t: 案件审理, kind: 材料, type: DISCIPLINE, days: 35, secrecy: 80,
+       levels: [正科级, 副处级]}
+    - {t: 巡察反馈整改跟踪, kind: 督办, type: SUPERVISION, days: 40}
+
+  PUBLIC_SECURITY:
+    - {t: 重大治安事件处置, kind: 应急, type: EMERGENCY, days: 3}
+    - {t: 刑事犯罪态势分析, kind: 材料, type: REPORT, days: 15}
+    - {t: 交通安全整治, kind: 督办, type: INSPECTION, days: 30}
+    - {t: 大型活动安保, kind: 协调, type: COORDINATION, days: 12}
+    - {t: 户籍人口管理, kind: 材料, type: ROUTINE, days: 20}
+    - {t: 基层治安巡查, kind: 调研, type: INSPECTION, days: 20}
+    - {t: 专项行动部署, kind: 督办, type: INSTRUCTION, days: 25}
+    - {t: 重大警情处置, kind: 应急, type: EMERGENCY, days: 2}
+    - {t: 队伍管理与装备保障, kind: 材料, type: ROUTINE, days: 25}
+
+  COURT:
+    - {t: 审判管理, kind: 材料, type: ROUTINE, days: 20}
+    - {t: 案件执行工作, kind: 督办, type: SUPERVISION, days: 40}
+    - {t: 审判质效分析, kind: 材料, type: REPORT, days: 20}
+    - {t: 涉诉信访事项, kind: 信访, type: PETITION, days: 30}
+    - {t: 司法公开工作, kind: 材料, type: ROUTINE, days: 20}
+    - {t: 审判队伍建设, kind: 材料, type: ROUTINE, days: 30}
+
+  PROCURATORATE:
+    - {t: 刑事检察工作, kind: 材料, type: ROUTINE, days: 25}
+    - {t: 控告申诉受理, kind: 信访, type: PETITION, days: 25}
+    - {t: 案件管理, kind: 材料, type: ROUTINE, days: 20}
+    - {t: 法律监督专项, kind: 督办, type: INSPECTION, days: 35}
+    - {t: 检务公开, kind: 材料, type: ROUTINE, days: 20}
+
+  FINANCE:
+    - {t: 年度预算编制, kind: 材料, type: BUDGET, days: 40,
+       levels: [正科级, 副处级]}
+    - {t: 预算执行分析, kind: 材料, type: BUDGET, days: 20}
+    - {t: 财政资金拨付审核, kind: 材料, type: BUDGET, days: 12}
+    - {t: 转移支付资金安排, kind: 协调, type: BUDGET, days: 25}
+    - {t: 政府债务风险排查, kind: 调研, type: AUDIT, days: 30,
+       levels: [正科级, 副处级]}
+    - {t: 财政供养人员核查, kind: 材料, type: AUDIT, days: 25}
+
+  AUDIT:
+    - {t: 年度审计项目计划, kind: 材料, type: PLANNING, days: 25}
+    - {t: 财政收支审计, kind: 调研, type: AUDIT, days: 45}
+    - {t: 经济责任审计, kind: 调研, type: AUDIT, days: 50,
+       levels: [正科级, 副处级], secrecy: 60}
+    - {t: 审计整改督促, kind: 督办, type: SUPERVISION, days: 30}
+    - {t: 专项资金审计, kind: 调研, type: AUDIT, days: 40}
+
+  EDUCATION:
+    - {t: 中小学招生入学, kind: 协调, type: ROUTINE, days: 30}
+    - {t: 教师队伍建设, kind: 材料, type: ROUTINE, days: 30}
+    - {t: 校舍安全排查, kind: 调研, type: INSPECTION, days: 25}
+    - {t: 义务教育均衡发展, kind: 材料, type: POLICY, days: 40,
+       levels: [正科级, 副处级]}
+    - {t: 学生资助工作, kind: 材料, type: ROUTINE, days: 20}
+
+  HEALTH:
+    - {t: 疾病预防控制, kind: 督办, type: ROUTINE, days: 25}
+    - {t: 医疗机构监管, kind: 督办, type: INSPECTION, days: 30}
+    - {t: 突发公共卫生事件处置, kind: 应急, type: EMERGENCY, days: 3}
+    - {t: 基层卫生服务能力建设, kind: 材料, type: POLICY, days: 35}
+    - {t: 爱国卫生运动, kind: 协调, type: ROUTINE, days: 25}
+
+  DEVELOPMENT_REFORM:
+    - {t: 国民经济和社会发展计划编制, kind: 材料, type: PLANNING, days: 45,
+       levels: [正科级, 副处级]}
+    - {t: 项目立项审核, kind: 材料, type: PROJECT, days: 25}
+    - {t: 重点项目调度, kind: 督办, type: PROJECT, days: 20}
+    - {t: 固定资产投资统计, kind: 材料, type: REPORT, days: 12}
+    - {t: 物价监测与调控, kind: 调研, type: ROUTINE, days: 20}
+
+  TAXATION:
+    - {t: 税收收入组织, kind: 材料, type: ROUTINE, days: 20}
+    - {t: 税源管理, kind: 调研, type: INSPECTION, days: 30}
+    - {t: 纳税服务改进, kind: 材料, type: ROUTINE, days: 25}
+    - {t: 税收违法案件查处, kind: 督办, type: INSPECTION, days: 40}
+    - {t: 上级税务机关部署落实, kind: 督办, type: INSTRUCTION, days: 20}
+
+  STATE_SECURITY:
+    - {t: 有关情况报送, kind: 材料, type: REPORT, days: 10, secrecy: 90}
+
+  GENERIC_DEPARTMENT:
+    - {t: 本部门业务工作推进, kind: 材料, type: ROUTINE, days: 25}
+    - {t: 行业管理与检查, kind: 督办, type: INSPECTION, days: 30}
+    - {t: 服务对象诉求办理, kind: 信访, type: PETITION, days: 20}

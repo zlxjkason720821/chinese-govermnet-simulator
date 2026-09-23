@@ -42,6 +42,11 @@ def vacate(con, char_id, on, reason):
                 "WHERE character_id=? AND end_date IS NULL", (on.isoformat(), reason, char_id))
     for sid in slots:
         con.execute("UPDATE position_slot SET status='VACANT',holder_id=NULL WHERE id=?", (sid,))
+    # 调离警察（法官、检察官）工作岗位的，衔级不予保留（警衔条例第十九条）。
+    # 这要在离岗的当下就办，不能等月初扫描——中间那段时间他既不在岗，
+    # 库里却还挂着警衔。
+    if reason not in ("RETIREMENT",):
+        proranks.revoke_on_transfer(con, on)
     return slots
 
 

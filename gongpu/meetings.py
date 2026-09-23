@@ -100,14 +100,18 @@ def pending_agenda(con, on, kind):
         for r in con.execute(
                 "SELECT p.id, p.name, p.scale, COALESCE(o.short_name,o.name) AS org "
                 "FROM project p LEFT JOIN organization o ON o.id = p.organization_id "
-                "WHERE p.state='RESEARCH' AND o.admin_level='COUNTY' "
+                # 程序审查走完了才上会集体决策。这是 V3 §11.4 的环节顺序：
+                # 可研 → 资金测算 → 征求意见 → 专业论证 → 程序审查 → 集体决策。
+                # 原来盯着"专业论证"，项目走过那一步就再也上不了会，
+                # 八十个项目全卡在程序审查上。
+                "WHERE p.state='REVIEW' AND o.admin_level='COUNTY' "
                 # 论证期还没走完的不上会。上了的话，原来那条排期事件还挂着，
                 # 会议推一步、排期再推一步，五六年的项目两年就建成了。
                 "AND NOT EXISTS (SELECT 1 FROM scheduled_event se "
                 "  WHERE se.fired=0 AND se.event_type='project_step' "
                 "  AND se.data LIKE '%\"project\": ' || p.id || '%') "
                 "ORDER BY p.id LIMIT 6"):
-            items.append({"topic": "研究%s立项" % r["name"], "source": "project",
+            items.append({"topic": "集体决策：%s立项" % r["name"], "source": "project",
                           "source_id": r["id"],
                           "detail": "%s承办，体量%s" % (r["org"], "★" * r["scale"])})
     return items

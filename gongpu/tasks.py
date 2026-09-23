@@ -36,20 +36,16 @@ def kinds():
 
 
 def assign(con, character_id, on, rng, organization_id=None):
-    """给某人派一件事。事项内容从该类型的池子里抽，用 world 流（这是世界事实）。
+    """给某人派一件事。
+
+    事项从模板库里抽（§16 通用 + §17 专业机关），用 world 流——这是世界事实。
+
+    抽哪一条取决于两件事：他在什么机关，他在哪个层次。
+    组织部的科员摊上的是干部档案审核，公安局的科员摊上的是基层治安巡查，
+    办公厅的科员摊上的是会务和批示流转。同样是科员，桌面上的东西不一样。
 
     同一个人手上不会同时出现两件一样的事，也不会刚办完又原样再来一遍。
     """
-    k = cfg()["kinds"]
-    kind = rng["world"].choice(sorted(k))
-    spec = k[kind]
-    recent = {r[0] for r in con.execute(
-        "SELECT subject FROM work_item WHERE assignee_id=? "
-        "AND (state='PENDING' OR resolved_date >= ?) ",
-        # 不能用 on.replace(year=...)：闰年 2 月 29 日会直接抛 ValueError
-        (character_id, (on - timedelta(days=365)).isoformat()))}
-    pool = [x for x in spec["subjects"] if x not in recent] or spec["subjects"]
-    subject = rng["world"].choice(pool)
     if organization_id is None:
         row = con.execute(
             "SELECT s.organization_id FROM office_holding h "
@@ -57,12 +53,69 @@ def assign(con, character_id, on, rng, organization_id=None):
             "WHERE h.character_id=? AND h.end_date IS NULL LIMIT 1",
             (character_id,)).fetchone()
         organization_id = row[0] if row else None
+    tpl = _pick_template(con, character_id, organization_id, on, rng)
+    if tpl is None:
+        return None
+    spec = cfg()["kinds"][tpl["kind"]]
     cur = con.execute(
         "INSERT INTO work_item(kind,subject,organization_id,assignee_id,created_date,"
-        "due_date) VALUES(?,?,?,?,?,?)",
-        (kind, subject, organization_id, character_id, on.isoformat(),
-         (on + timedelta(days=spec["days"])).isoformat()))
+        "due_date,matter_type,target_org_id,current_stage,secrecy,"
+        "importance,urgency) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        (tpl["kind"], tpl["t"], organization_id, character_id, on.isoformat(),
+         (on + timedelta(days=tpl.get("days", spec["days"]))).isoformat(),
+         tpl.get("type", "ROUTINE"), organization_id, "承办",
+         tpl.get("secrecy", 0), tpl.get("importance", 50),
+         tpl.get("urgency", 50)))
     return cur.lastrowid
+
+
+_MATTERS = {}
+
+
+def templates():
+    if not _MATTERS:
+        import yaml
+        _MATTERS.update(yaml.safe_load(
+            (paths.DATA / "matters.yaml").read_text(encoding="utf-8")))
+    return _MATTERS
+
+
+def pool_for(con, organization_id, level):
+    """这个机关、这个层次的人，可能摊上哪些事。
+
+    专业机关的事排在前面（一个组织部的人主要办干部的事），
+    通用事项族作为底子（谁都要报材料、谁都要应付督查）。
+    """
+    m = templates()
+    arch = None
+    if organization_id:
+        r = con.execute("SELECT archetype FROM organization WHERE id=?",
+                        (organization_id,)).fetchone()
+        arch = r[0] if r else None
+    out = list(m.get("by_archetype", {}).get(arch or "", []))
+    out += [x for fam in m.get("common", {}).values() for x in fam]
+    if level:
+        out = [x for x in out if not x.get("levels") or level in x["levels"]]
+    return out
+
+
+def _pick_template(con, cid, org_id, on, rng):
+    r = con.execute(
+        "SELECT d.leadership_level FROM office_holding h "
+        "JOIN position_slot s ON s.id = h.position_slot_id "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "WHERE h.character_id=? AND h.end_date IS NULL AND h.primary_position=1 "
+        "LIMIT 1", (cid,)).fetchone()
+    pool = pool_for(con, org_id, r[0] if r else None)
+    if not pool:
+        return None
+    recent = {x[0] for x in con.execute(
+        "SELECT subject FROM work_item WHERE assignee_id=? "
+        "AND (state='PENDING' OR resolved_date >= ?)",
+        # 不能用 on.replace(year=...)：闰年 2 月 29 日会直接抛 ValueError
+        (cid, (on - timedelta(days=365)).isoformat()))}
+    fresh = [x for x in pool if x["t"] not in recent] or pool
+    return rng["world"].choice(sorted(fresh, key=lambda x: x["t"]))
 
 
 def pending(con, character_id, on):
