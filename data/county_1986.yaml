@@ -1,0 +1,311 @@
+# 1986 开局：一个县的四套班子与岗位编制
+# （技术文档 §2 数据配置、§82 MVP；蓝图文档 十六 四套班子 + 纪委监委）
+#
+# 机构名用正式全称，简称单列。班子名单按党委、人大、政府、政协的次序排，
+# 每套班子内部按 protocol 排序——这个次序本身就是制度的一部分。
+
+scenario_id: county_1986
+start_date: 1986-07-15
+county_name: 红山县
+
+organizations:
+  # 中央。只建关键机构和岗位，不铺满编制——
+  # 这一层存在的意义是让中央委员会和政治局有真实的人可选（§46、蓝图二十三）。
+  - {key: zhongyang, name: 中国共产党中央委员会, short: 中共中央, type: PARTY,      grade: 正国级, level: CENTRAL, protocol: 1, system: 党委}
+  - {key: guowuyuan, name: 国务院,               short: 国务院,   type: GOVERNMENT, grade: 正国级, level: CENTRAL, protocol: 3, system: 政务}
+  - {key: zy_zzb,    name: 中共中央组织部,       short: 中央组织部, type: PARTY,    grade: 正部级, level: CENTRAL, parent: zhongyang, system: 组织}
+  - {key: zy_bgt,    name: 中共中央办公厅,       short: 中央办公厅, type: PARTY,    grade: 正部级, level: CENTRAL, parent: zhongyang, system: 综合}
+  - {key: zy_jwei,   name: 中共中央纪律检查委员会, short: 中央纪委, type: PARTY,    grade: 副国级, level: CENTRAL, parent: zhongyang, system: 纪检}
+  - {key: quanguo_rd, name: 全国人民代表大会常务委员会, short: 全国人大常委会, type: PEOPLES_CONGRESS, grade: 正国级, level: CENTRAL, protocol: 2, system: 人大}
+  - {key: quanguo_zx, name: 中国人民政治协商会议全国委员会, short: 全国政协, type: CPPCC, grade: 正国级, level: CENTRAL, protocol: 4, system: 政协}
+  - {key: guojia,    name: 中华人民共和国,       short: 中华人民共和国, type: STATE, grade: 正国级, level: CENTRAL, protocol: 0, system: 党委}
+
+  # 省级
+  - {key: shengwei,  name: 中国共产党河北省委员会, short: 中共河北省委, type: PARTY,      grade: 正部级, level: PROVINCIAL, protocol: 1, parent: zhongyang, system: 党委}
+  - {key: shengzf,   name: 河北省人民政府,       short: 河北省人民政府, type: GOVERNMENT, grade: 正部级, level: PROVINCIAL, protocol: 3, parent: guowuyuan, system: 政务}
+  - {key: sheng_zzb, name: 中共河北省委组织部,   short: 省委组织部, type: PARTY, grade: 副部级, level: PROVINCIAL, parent: shengwei, system: 组织}
+  - {key: sheng_bgt, name: 中共河北省委办公厅,   short: 省委办公厅, type: PARTY, grade: 副部级, level: PROVINCIAL, parent: shengwei, system: 综合}
+  - {key: shengzf_bgt, name: 河北省人民政府办公厅, short: 省政府办公厅, type: GOVERNMENT, grade: 副部级, level: PROVINCIAL, parent: shengzf, system: 综合}
+
+  # 市级（红山县的上级）。有了这一层，县委书记才有地方可去，
+  # 党校的厅级轮训范围也才落得下来。
+  - {key: shiwei,   name: 中国共产党平州市委员会, short: 中共平州市委, type: PARTY,      grade: 正厅级, level: MUNICIPAL, protocol: 1, parent: shengwei, system: 党委}
+  - {key: shizf,    name: 平州市人民政府,       short: 平州市人民政府, type: GOVERNMENT, grade: 正厅级, level: MUNICIPAL, protocol: 3, parent: shengzf, system: 政务}
+  - {key: shi_bgt,  name: 中共平州市委办公厅,   short: 市委办公厅, type: PARTY,      grade: 正处级, level: MUNICIPAL, parent: shiwei, system: 综合}
+  - {key: shizf_bgt, name: 平州市人民政府办公厅, short: 市政府办公厅, type: GOVERNMENT, grade: 正处级, level: MUNICIPAL, parent: shizf, system: 综合}
+  - {key: shi_zzb,  name: 中共平州市委组织部,   short: 市委组织部, type: PARTY,      grade: 正处级, level: MUNICIPAL, parent: shiwei, system: 组织}
+  - {key: shi_czj,  name: 平州市财政局,         short: 市财政局,   type: GOVERNMENT, grade: 正处级, level: MUNICIPAL, parent: shizf, system: 财经}
+
+  # 四套班子（县级）
+  - {key: xianwei,  name: 中国共产党红山县委员会, short: 中共红山县委, type: PARTY,      grade: 正处级, protocol: 1, parent: shiwei, system: 党委}
+  - {key: renda,    name: 红山县人民代表大会常务委员会, short: 红山县人大常委会, type: PEOPLES_CONGRESS, grade: 正处级, protocol: 2, system: 人大}
+  - {key: xianzf,   name: 红山县人民政府,       short: 红山县人民政府, type: GOVERNMENT, grade: 正处级, protocol: 3, parent: shizf, system: 政务}
+  - {key: zhengxie, name: 中国人民政治协商会议红山县委员会, short: 红山县政协, type: CPPCC, grade: 正处级, protocol: 4, system: 政协}
+  - {key: jiwei,    name: 中共红山县纪律检查委员会, short: 中共红山县纪委, type: PARTY, grade: 副处级, protocol: 5, parent: xianwei, system: 纪检}
+
+  # 县委工作部门
+  - {key: xw_bgs,   name: 中共红山县委办公室,   short: 县委办,     type: PARTY, grade: 正科级, parent: xianwei, system: 综合}
+  - {key: zzb,      name: 中共红山县委组织部,   short: 县委组织部, type: PARTY, grade: 正科级, parent: xianwei, system: 组织}
+  - {key: xcb,      name: 中共红山县委宣传部,   short: 县委宣传部, type: PARTY, grade: 正科级, parent: xianwei, system: 宣传}
+  - {key: tzb,      name: 中共红山县委统战部,   short: 县委统战部, type: PARTY, grade: 正科级, parent: xianwei, system: 宣传}
+  - {key: zfw,      name: 中共红山县委政法委员会, short: 县委政法委, type: PARTY, grade: 正科级, parent: xianwei, system: 政法}
+
+  # 政府工作部门
+  - {key: zf_bgs,   name: 红山县人民政府办公室, short: 县政府办, type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 综合}
+  - {key: czj,      name: 红山县财政局,         short: 财政局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 财经}
+  - {key: mzj,      name: 红山县民政局,         short: 民政局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务}
+  - {key: nyj,      name: 红山县农业局,         short: 农业局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务}
+  - {key: jyj,      name: 红山县教育局,         short: 教育局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务}
+  - {key: gaj,      name: 红山县公安局,         short: 公安局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 政法}
+  - {key: sjj,      name: 红山县审计局,         short: 审计局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 财经}
+
+  # 乡镇
+  - {key: qingyang, name: 中共青阳镇委员会,     short: 青阳镇,   type: TOWNSHIP, grade: 正科级, parent: xianwei, system: 乡镇}
+  - {key: shuanghe, name: 中共双河乡委员会,     short: 双河乡,   type: TOWNSHIP, grade: 正科级, parent: xianwei, system: 乡镇}
+  - {key: liulin,   name: 中共柳林乡委员会,     short: 柳林乡,   type: TOWNSHIP, grade: 正科级, parent: xianwei, system: 乡镇}
+
+# 干部管理权限（§21）。市级班子由省管，县级四套班子由市管，其余县管。
+authorities:
+  - {level: CENTRAL, organization: zhongyang}
+  - {level: CENTRAL, organization: quanguo_rd}
+  - {level: CENTRAL, organization: quanguo_zx}
+  - {level: CENTRAL, organization: guojia}
+  - {level: CENTRAL, organization: guowuyuan}
+  - {level: CENTRAL, organization: shengwei}
+  - {level: CENTRAL, organization: shengzf}
+  - {level: PROVINCIAL, organization: shengwei}
+  - {level: PROVINCIAL, organization: shiwei}
+  - {level: PROVINCIAL, organization: shizf}
+  - {level: MUNICIPAL, organization: shiwei}
+  - {level: MUNICIPAL, organization: xianwei}
+  - {level: MUNICIPAL, organization: renda}
+  - {level: MUNICIPAL, organization: xianzf}
+  - {level: MUNICIPAL, organization: zhengxie}
+  - {level: COUNTY,    organization: xianwei}
+
+# protocol：本套班子内部的排序。数字小的排前面。
+position_definitions:
+  #  中央。总书记、总理、委员长、主席这一层是正国级；
+  #  常委的行政职务就出在这里——总书记不可能是省长。
+  - {key: zongshuji, name: 总书记,  lead: 1, auth: CENTRAL, min_age: 55, max_age: 70, party: 1, exp: 35, level: 正国级, protocol: 1}
+  - {key: zongli,  name: 总理,     lead: 1, auth: CENTRAL, min_age: 55, max_age: 70, party: 1, exp: 35, level: 正国级, protocol: 1}
+  - {key: weiyuanzhang, name: 委员长, lead: 1, auth: CENTRAL, min_age: 55, max_age: 70, party: 1, exp: 35, level: 正国级, protocol: 1}
+  - {key: zx_zhuxi, name: 主席,    lead: 1, auth: CENTRAL, min_age: 55, max_age: 70, party: 0, exp: 35, level: 正国级, protocol: 1}
+  - {key: guojia_zhuxi, name: 主席, lead: 1, auth: CENTRAL, min_age: 55, max_age: 70, party: 1, exp: 35, level: 正国级, protocol: 1}
+  - {key: shujichu, name: 书记处书记, lead: 1, auth: CENTRAL, min_age: 52, max_age: 68, party: 1, exp: 32, level: 副国级, protocol: 2}
+  - {key: zy_jwsj, name: 书记,     lead: 1, auth: CENTRAL, min_age: 55, max_age: 68, party: 1, exp: 33, level: 副国级, protocol: 2}
+  - {key: fuzongli, name: 副总理,  lead: 1, auth: CENTRAL, min_age: 52, max_age: 68, party: 1, exp: 32, level: 副国级, protocol: 2}
+  - {key: zy_bzh,  name: 部长,     lead: 1, auth: CENTRAL, min_age: 52, max_age: 65, party: 1, exp: 30, level: 正部级, protocol: 3}
+  #  省级
+  - {key: sw_sj,   name: 书记,     lead: 1, auth: CENTRAL, min_age: 52, max_age: 65, party: 1, exp: 30, level: 正部级, protocol: 1}
+  - {key: shengzhang, name: 省长,  lead: 1, auth: CENTRAL, min_age: 50, max_age: 65, party: 1, exp: 28, level: 正部级, protocol: 1}
+  - {key: sw_fsj,  name: 副书记,   lead: 1, auth: CENTRAL, min_age: 48, max_age: 63, party: 1, exp: 25, level: 副部级, protocol: 2}
+  - {key: sw_cw,   name: 常委,     lead: 1, auth: CENTRAL, min_age: 46, max_age: 63, party: 1, exp: 23, level: 副部级, protocol: 3}
+  - {key: fshengzhang, name: 副省长, lead: 1, auth: CENTRAL, min_age: 45, max_age: 63, party: 0, exp: 22, level: 副部级, protocol: 3}
+  - {key: sheng_bzh, name: 部长,   lead: 1, auth: CENTRAL, min_age: 45, max_age: 62, party: 1, exp: 22, level: 副部级, protocol: 4}
+  - {key: shengkeyuan, name: 科员, lead: 0, auth: PROVINCIAL, min_age: 18, max_age: 60, party: 0, exp: 0, level: 科员, protocol: 20}
+  #  省级办公厅
+  - {key: sheng_msz,  name: 秘书长,   lead: 1, auth: CENTRAL,    min_age: 48, max_age: 62, party: 1, exp: 25, level: 副部级, protocol: 4}
+  - {key: sheng_fmsz, name: 副秘书长, lead: 1, auth: PROVINCIAL, min_age: 42, max_age: 60, party: 1, exp: 20, level: 正厅级, protocol: 5}
+  - {key: sheng_cz,   name: 处长,     lead: 1, auth: PROVINCIAL, min_age: 33, max_age: 57, party: 1, exp: 10, level: 正处级, protocol: 10}
+  - {key: sheng_fcz,  name: 副处长,   lead: 1, auth: PROVINCIAL, min_age: 30, max_age: 56, party: 0, exp: 7,  level: 副处级, protocol: 11}
+  #  省级领导秘书。级别按惯例定：省委书记、省长的秘书是副处级，
+  #  领导升迁时下放到县里主政，正好是正处级——县委书记、县长。
+  - {key: sw_sj_ms,   name: 省委书记秘书, lead: 0, auth: PROVINCIAL, min_age: 30, max_age: 50, party: 1, exp: 8, level: 副处级, protocol: 18}
+  - {key: shengz_ms,  name: 省长秘书,     lead: 0, auth: PROVINCIAL, min_age: 30, max_age: 50, party: 1, exp: 8, level: 副处级, protocol: 18}
+  - {key: fshengz_ms, name: 副省长秘书,   lead: 0, auth: PROVINCIAL, min_age: 28, max_age: 50, party: 1, exp: 5, level: 正科级, protocol: 19}
+  #  中央领导秘书。副厅级，领导升迁时外放正好是正厅级——市委书记、市长。
+  - {key: zy_ms,      name: 中央领导秘书, lead: 0, auth: CENTRAL,    min_age: 35, max_age: 55, party: 1, exp: 15, level: 副厅级, protocol: 18}
+
+  #  市级
+  - {key: swsj,   name: 书记,       lead: 1, auth: PROVINCIAL, min_age: 45, max_age: 62, party: 1, exp: 20, level: 正厅级, protocol: 1}
+  - {key: shizhang, name: 市长,     lead: 1, auth: PROVINCIAL, min_age: 43, max_age: 62, party: 1, exp: 18, level: 正厅级, protocol: 1}
+  - {key: swfsj,  name: 副书记,     lead: 1, auth: PROVINCIAL, min_age: 40, max_age: 58, party: 1, exp: 15, level: 副厅级, protocol: 2}
+  - {key: swcw,   name: 常委,       lead: 1, auth: PROVINCIAL, min_age: 40, max_age: 58, party: 1, exp: 14, level: 副厅级, protocol: 3}
+  - {key: fshizhang, name: 副市长,  lead: 1, auth: PROVINCIAL, min_age: 38, max_age: 58, party: 0, exp: 13, level: 副厅级, protocol: 3}
+  - {key: shibuzh, name: 部长,      lead: 1, auth: MUNICIPAL,  min_age: 36, max_age: 58, party: 1, exp: 12, level: 正处级, protocol: 10}
+  - {key: mishuzhang, name: 秘书长,  lead: 1, auth: PROVINCIAL, min_age: 40, max_age: 58, party: 1, exp: 16, level: 副厅级, protocol: 4}
+  - {key: fumishuzhang, name: 副秘书长, lead: 1, auth: MUNICIPAL, min_age: 35, max_age: 56, party: 1, exp: 12, level: 正处级, protocol: 5}
+  #  办公厅的处室。原来只有一个笼统的"处长"，于是市委办公厅的科员
+  #  和县里的科员一样，下一步永远是副局长那老三样。
+  #  处室分开，路线才分得开：文稿的、服务领导的、督查的，走向不一样。
+  - {key: ms1chu,  name: 秘书一处处长, lead: 1, auth: MUNICIPAL, min_age: 30, max_age: 55, party: 1, exp: 6,  level: 正科级, protocol: 8}
+  - {key: ms2chu,  name: 秘书二处处长, lead: 1, auth: MUNICIPAL, min_age: 30, max_age: 55, party: 1, exp: 6,  level: 正科级, protocol: 9}
+  - {key: zhchu,   name: 综合处处长,   lead: 1, auth: MUNICIPAL, min_age: 30, max_age: 55, party: 1, exp: 6,  level: 正科级, protocol: 10}
+  - {key: dcchu,   name: 督查处处长,   lead: 1, auth: MUNICIPAL, min_age: 30, max_age: 55, party: 1, exp: 6,  level: 正科级, protocol: 11}
+  - {key: chuzhang, name: 处长,     lead: 1, auth: MUNICIPAL,  min_age: 30, max_age: 55, party: 1, exp: 6,  level: 正科级, protocol: 12}
+  - {key: ms1fuchu, name: 秘书一处副处长, lead: 1, auth: MUNICIPAL, min_age: 27, max_age: 54, party: 0, exp: 3, level: 副科级, protocol: 14}
+  - {key: ms2fuchu, name: 秘书二处副处长, lead: 1, auth: MUNICIPAL, min_age: 27, max_age: 54, party: 0, exp: 3, level: 副科级, protocol: 15}
+  - {key: zhfuchu,  name: 综合处副处长,   lead: 1, auth: MUNICIPAL, min_age: 27, max_age: 54, party: 0, exp: 3, level: 副科级, protocol: 16}
+  - {key: dcfuchu,  name: 督查处副处长,   lead: 1, auth: MUNICIPAL, min_age: 27, max_age: 54, party: 0, exp: 3, level: 副科级, protocol: 17}
+  - {key: fuchuzhang, name: 副处长, lead: 1, auth: MUNICIPAL,  min_age: 27, max_age: 54, party: 0, exp: 3,  level: 副科级, protocol: 18}
+  #  领导个人秘书（"大秘"）。蓝图十二点名：必须和办公厅干部区分开。
+  #  这是服务性质的岗位，跟人走，领导动了它就没了——见识和信任是真的，
+  #  但它本身不是台阶。serves 指明服务哪个岗位。
+  #  级别按"领导升迁时下放正好接得上"来定：
+  #  市委书记、市长的秘书是副科级，外放升一级是正科级——乡镇党委书记、乡镇长。
+  #  副市长的秘书是科员，外放升一级是副科级——副乡镇长。
+  - {key: sjmishu, name: 书记秘书,   lead: 0, auth: MUNICIPAL, min_age: 25, max_age: 45, party: 1, exp: 4, level: 副科级, protocol: 19}
+  - {key: szmishu, name: 市长秘书,   lead: 0, auth: MUNICIPAL, min_age: 25, max_age: 45, party: 1, exp: 4, level: 副科级, protocol: 19}
+  - {key: fszmishu, name: 副市长秘书, lead: 0, auth: MUNICIPAL, min_age: 24, max_age: 45, party: 0, exp: 2, level: 科员, protocol: 20}
+  - {key: mishu,   name: 秘书,      lead: 0, auth: MUNICIPAL,  min_age: 22, max_age: 50, party: 0, exp: 1,  level: 科员,   protocol: 21}
+  - {key: shijuzh, name: 局长,      lead: 1, auth: MUNICIPAL,  min_age: 36, max_age: 58, party: 1, exp: 12, level: 正处级, protocol: 10}
+  - {key: shikeyuan, name: 科员,    lead: 0, auth: MUNICIPAL,  min_age: 18, max_age: 60, party: 0, exp: 0,  level: 科员,   protocol: 20}
+
+  #  党委
+  - {key: xwsj,   name: 书记,       lead: 1, auth: MUNICIPAL, min_age: 35, max_age: 58, party: 1, exp: 10, level: 正处级, protocol: 1}
+  - {key: xwfsj,  name: 副书记,     lead: 1, auth: MUNICIPAL, min_age: 30, max_age: 56, party: 1, exp: 6,  level: 副处级, protocol: 2}
+  - {key: changwei, name: 常委,     lead: 1, auth: MUNICIPAL, min_age: 30, max_age: 56, party: 1, exp: 5,  level: 副处级, protocol: 3}
+  #  人大
+  - {key: rdzr,   name: 主任,       lead: 1, auth: MUNICIPAL, min_age: 40, max_age: 60, party: 1, exp: 10, level: 正处级, protocol: 1}
+  - {key: rdfzr,  name: 副主任,     lead: 1, auth: MUNICIPAL, min_age: 35, max_age: 60, party: 0, exp: 6,  level: 副处级, protocol: 2}
+  #  政府
+  - {key: xzh,    name: 县长,       lead: 1, auth: MUNICIPAL, min_age: 32, max_age: 58, party: 1, exp: 8,  level: 正处级, protocol: 1}
+  - {key: cwfxz,  name: 常务副县长, lead: 1, auth: MUNICIPAL, min_age: 30, max_age: 56, party: 1, exp: 6,  level: 副处级, protocol: 2}
+  - {key: fxz,    name: 副县长,     lead: 1, auth: MUNICIPAL, min_age: 28, max_age: 55, party: 0, exp: 5,  level: 副处级, protocol: 3}
+  #  政协
+  - {key: zxzx,   name: 主席,       lead: 1, auth: MUNICIPAL, min_age: 40, max_age: 60, party: 0, exp: 10, level: 正处级, protocol: 1}
+  - {key: zxfzx,  name: 副主席,     lead: 1, auth: MUNICIPAL, min_age: 35, max_age: 60, party: 0, exp: 6,  level: 副处级, protocol: 2}
+  #  纪委
+  - {key: jwsj,   name: 书记,       lead: 1, auth: MUNICIPAL, min_age: 33, max_age: 56, party: 1, exp: 6,  level: 副处级, protocol: 1}
+  - {key: jwfsj,  name: 副书记,     lead: 1, auth: COUNTY,    min_age: 28, max_age: 55, party: 1, exp: 4,  level: 正科级, protocol: 2}
+  #  部门与乡镇
+  - {key: buzh,   name: 部长,       lead: 1, auth: COUNTY, min_age: 28, max_age: 56, party: 1, exp: 5, level: 正科级, protocol: 10}
+  - {key: juzh,   name: 局长,       lead: 1, auth: COUNTY, min_age: 28, max_age: 57, party: 1, exp: 4, level: 正科级, protocol: 10}
+  - {key: fjuzh,  name: 副局长,     lead: 1, auth: COUNTY, min_age: 25, max_age: 55, party: 0, exp: 2, level: 副科级, protocol: 11}
+  - {key: zhuren, name: 主任,       lead: 1, auth: COUNTY, min_age: 28, max_age: 57, party: 1, exp: 4, level: 正科级, protocol: 10}
+  - {key: fzhuren, name: 副主任,    lead: 1, auth: COUNTY, min_age: 25, max_age: 55, party: 0, exp: 2, level: 副科级, protocol: 11}
+  - {key: xzsj,   name: 书记,       lead: 1, auth: COUNTY, min_age: 26, max_age: 55, party: 1, exp: 3, level: 正科级, protocol: 10}
+  - {key: xzz,    name: 乡镇长,     lead: 1, auth: COUNTY, min_age: 25, max_age: 55, party: 1, exp: 2, level: 正科级, protocol: 11}
+  - {key: fxzz,   name: 副乡镇长,   lead: 1, auth: COUNTY, min_age: 23, max_age: 53, party: 0, exp: 1, level: 副科级, protocol: 12}
+  - {key: fxzsj,  name: 副书记,     lead: 1, auth: COUNTY, min_age: 24, max_age: 54, party: 1, exp: 2, level: 副科级, protocol: 12}
+  - {key: keyuan, name: 科员,       lead: 0, auth: COUNTY, min_age: 18, max_age: 60, party: 0, exp: 0, level: 科员,   protocol: 20}
+  - {key: banshi, name: 办事员,     lead: 0, auth: COUNTY, min_age: 18, max_age: 60, party: 0, exp: 0, level: 办事员, protocol: 21}
+
+slots:
+  - {org: zhongyang, pos: zongshuji, n: 1}
+  - {org: zhongyang, pos: shujichu, n: 3}
+  - {org: guowuyuan, pos: zongli,  n: 1}
+  - {org: guowuyuan, pos: fuzongli, n: 3}
+  - {org: quanguo_rd, pos: weiyuanzhang, n: 1}
+  - {org: quanguo_zx, pos: zx_zhuxi, n: 1}
+  - {org: zy_jwei,  pos: zy_jwsj,  n: 1}
+  - {org: guojia,   pos: guojia_zhuxi, n: 1}
+  - {org: zy_zzb,   pos: zy_bzh,   n: 1}
+  - {org: zy_bgt,   pos: zy_bzh,   n: 1}
+  - {org: zy_bgt,   pos: zy_ms,    n: 1, serves: {org: zhongyang, pos: zongshuji}}
+  - {org: zy_bgt,   pos: zy_ms,    n: 2, serves: {org: zhongyang, pos: shujichu}}
+  - {org: shengwei, pos: sw_sj,    n: 1}
+  - {org: shengwei, pos: sw_fsj,   n: 2}
+  - {org: shengwei, pos: sw_cw,    n: 6}
+  - {org: shengzf,  pos: shengzhang, n: 1}
+  - {org: shengzf,  pos: fshengzhang, n: 5}
+  - {org: sheng_zzb, pos: sheng_bzh, n: 1}
+  - {org: sheng_zzb, pos: shengkeyuan, n: 4}
+  - {org: sheng_bgt, pos: sheng_msz,  n: 1}
+  - {org: sheng_bgt, pos: sheng_fmsz, n: 2}
+  - {org: sheng_bgt, pos: sheng_cz,   n: 3}
+  - {org: sheng_bgt, pos: sheng_fcz,  n: 4}
+  - {org: sheng_bgt, pos: sw_sj_ms,   n: 1, serves: {org: shengwei, pos: sw_sj}}
+  - {org: sheng_bgt, pos: shengkeyuan, n: 5}
+  - {org: shengzf_bgt, pos: sheng_fmsz, n: 2}
+  - {org: shengzf_bgt, pos: sheng_cz,   n: 3}
+  - {org: shengzf_bgt, pos: sheng_fcz,  n: 4}
+  - {org: shengzf_bgt, pos: shengz_ms,  n: 1, serves: {org: shengzf, pos: shengzhang}}
+  - {org: shengzf_bgt, pos: fshengz_ms, n: 3, serves: {org: shengzf, pos: fshengzhang}}
+  - {org: shengzf_bgt, pos: shengkeyuan, n: 5}
+  - {org: shiwei,   pos: swsj,     n: 1}
+  - {org: shiwei,   pos: swfsj,    n: 2}
+  - {org: shiwei,   pos: swcw,     n: 5}
+  - {org: shizf,    pos: shizhang, n: 1}
+  - {org: shizf,    pos: fshizhang, n: 4}
+  - {org: shi_bgt,  pos: mishuzhang, n: 1}
+  - {org: shi_bgt,  pos: fumishuzhang, n: 2}
+  - {org: shi_bgt,  pos: ms1chu,  n: 1}
+  - {org: shi_bgt,  pos: ms2chu,  n: 1}
+  - {org: shi_bgt,  pos: zhchu,   n: 1}
+  - {org: shi_bgt,  pos: dcchu,   n: 1}
+  - {org: shi_bgt,  pos: ms1fuchu, n: 1}
+  - {org: shi_bgt,  pos: ms2fuchu, n: 1}
+  - {org: shi_bgt,  pos: zhfuchu,  n: 2}
+  - {org: shi_bgt,  pos: dcfuchu,  n: 1}
+  - {org: shi_bgt,  pos: sjmishu, n: 1, serves: {org: shiwei, pos: swsj}}
+  - {org: shi_bgt,  pos: mishu,    n: 3}
+  - {org: shi_bgt,  pos: shikeyuan, n: 6}
+  - {org: shizf_bgt, pos: fumishuzhang, n: 2}
+  - {org: shizf_bgt, pos: ms1chu,  n: 1}
+  - {org: shizf_bgt, pos: ms2chu,  n: 1}
+  - {org: shizf_bgt, pos: zhchu,   n: 1}
+  - {org: shizf_bgt, pos: ms1fuchu, n: 1}
+  - {org: shizf_bgt, pos: ms2fuchu, n: 1}
+  - {org: shizf_bgt, pos: zhfuchu,  n: 2}
+  - {org: shizf_bgt, pos: szmishu, n: 1, serves: {org: shizf, pos: shizhang}}
+  - {org: shizf_bgt, pos: fszmishu, n: 2, serves: {org: shizf, pos: fshizhang}}
+  - {org: shizf_bgt, pos: mishu,    n: 2}
+  - {org: shizf_bgt, pos: shikeyuan, n: 5}
+  - {org: shi_zzb,  pos: shibuzh,  n: 1}
+  - {org: shi_zzb,  pos: shikeyuan, n: 5}
+  - {org: shi_czj,  pos: shijuzh,  n: 1}
+  - {org: shi_czj,  pos: shikeyuan, n: 5}
+  - {org: xianwei,  pos: xwsj,     n: 1}
+  - {org: xianwei,  pos: xwfsj,    n: 2}
+  - {org: xianwei,  pos: changwei, n: 6}
+  - {org: renda,    pos: rdzr,     n: 1}
+  - {org: renda,    pos: rdfzr,    n: 3}
+  - {org: renda,    pos: keyuan,   n: 4}
+  - {org: xianzf,   pos: xzh,      n: 1}
+  - {org: xianzf,   pos: cwfxz,    n: 1}
+  - {org: xianzf,   pos: fxz,      n: 3}
+  - {org: zhengxie, pos: zxzx,     n: 1}
+  - {org: zhengxie, pos: zxfzx,    n: 3}
+  - {org: zhengxie, pos: keyuan,   n: 4}
+  - {org: jiwei,    pos: jwsj,     n: 1}
+  - {org: jiwei,    pos: jwfsj,    n: 2}
+  - {org: jiwei,    pos: keyuan,   n: 4}
+  - {org: xw_bgs,   pos: zhuren,   n: 1}
+  - {org: xw_bgs,   pos: fzhuren,  n: 2}
+  - {org: xw_bgs,   pos: keyuan,   n: 5}
+  - {org: zzb,      pos: buzh,     n: 1}
+  - {org: zzb,      pos: fzhuren,  n: 2}
+  - {org: zzb,      pos: keyuan,   n: 5}
+  - {org: xcb,      pos: buzh,     n: 1}
+  - {org: xcb,      pos: keyuan,   n: 4}
+  - {org: tzb,      pos: buzh,     n: 1}
+  - {org: tzb,      pos: keyuan,   n: 3}
+  - {org: zfw,      pos: buzh,     n: 1}
+  - {org: zfw,      pos: keyuan,   n: 3}
+  - {org: zf_bgs,   pos: zhuren,   n: 1}
+  - {org: zf_bgs,   pos: fzhuren,  n: 2}
+  - {org: zf_bgs,   pos: keyuan,   n: 6}
+  - {org: zf_bgs,   pos: banshi,   n: 3}
+  - {org: czj,      pos: juzh,     n: 1}
+  - {org: czj,      pos: fjuzh,    n: 2}
+  - {org: czj,      pos: keyuan,   n: 6}
+  - {org: mzj,      pos: juzh,     n: 1}
+  - {org: mzj,      pos: fjuzh,    n: 2}
+  - {org: mzj,      pos: keyuan,   n: 5}
+  - {org: nyj,      pos: juzh,     n: 1}
+  - {org: nyj,      pos: fjuzh,    n: 2}
+  - {org: nyj,      pos: keyuan,   n: 5}
+  - {org: jyj,      pos: juzh,     n: 1}
+  - {org: jyj,      pos: fjuzh,    n: 2}
+  - {org: jyj,      pos: keyuan,   n: 5}
+  - {org: gaj,      pos: juzh,     n: 1}
+  - {org: gaj,      pos: fjuzh,    n: 2}
+  - {org: gaj,      pos: keyuan,   n: 6}
+  - {org: sjj,      pos: juzh,     n: 1}
+  - {org: sjj,      pos: fjuzh,    n: 1}
+  - {org: sjj,      pos: keyuan,   n: 4}
+  - {org: qingyang, pos: xzsj,     n: 1}
+  - {org: qingyang, pos: xzz,      n: 1}
+  - {org: qingyang, pos: fxzz,     n: 2}
+  - {org: qingyang, pos: fxzsj,    n: 1}
+  - {org: qingyang, pos: keyuan,   n: 6}
+  - {org: shuanghe, pos: xzsj,     n: 1}
+  - {org: shuanghe, pos: xzz,      n: 1}
+  - {org: shuanghe, pos: fxzz,     n: 2}
+  - {org: shuanghe, pos: fxzsj,    n: 1}
+  - {org: shuanghe, pos: keyuan,   n: 5}
+  - {org: liulin,   pos: xzsj,     n: 1}
+  - {org: liulin,   pos: xzz,      n: 1}
+  - {org: liulin,   pos: keyuan,   n: 5}

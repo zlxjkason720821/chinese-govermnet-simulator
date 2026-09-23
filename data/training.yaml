@@ -1,0 +1,169 @@
+# 党校与干部培训（总规划 §27-30；蓝图 八/九/十；时间轴 §22 2008 党校工作条例）
+#
+# 设计上只有一句话：党校不是设施，是履历结构里的一个节点。
+# 它给四样东西（蓝图八）：理论与政策能力、履历完整度、组织观察、横向干部关系。
+# 其中没有一样叫"晋升率"。
+#
+# 轮训范围按 2008《党校工作条例》，时间轴文档标为 VERIFIED：
+#   中央党校   省部级、正厅局级、县（市）委书记
+#   省级党校   副厅局级、正县处级、乡镇党委书记
+#   市级党校   副县处级、正乡科级
+#   县级党校   科级及以下
+# 1986—2007 用的是更粗的版本，不能拿 2008 的范围倒推 1986。
+
+schools:
+  CENTRAL:    {name: 中央党校, short: 中央党校}
+  PROVINCIAL: {name: 省委党校, short: 省委党校}
+  MUNICIPAL:  {name: 平州市委党校, short: 市委党校}
+  COUNTY:     {name: 红山县委党校, short: 县委党校}
+
+programs:
+  # ---- 任职培训：为任新职而训。这一类是"提级"的正当通道。----
+  - key: rz_county
+    name: 科级干部任职培训班
+    school: COUNTY
+    type: 任职培训
+    days: 30
+    targets: [办事员, 科员, 副科级]
+    quota: 3
+    valid_from: 1986-01-01
+
+  - key: rz_city
+    name: 县处级干部任职培训班
+    school: MUNICIPAL
+    type: 任职培训
+    days: 45
+    targets: [正科级, 副处级]
+    quota: 2
+    valid_from: 1986-01-01
+
+  - key: rz_prov
+    name: 厅局级干部任职培训班
+    school: PROVINCIAL
+    type: 任职培训
+    days: 60
+    targets: [正处级, 副厅级]
+    quota: 1
+    valid_from: 1986-01-01
+
+  - key: rz_central
+    name: 省部级干部研修班
+    school: CENTRAL
+    type: 任职培训
+    days: 60
+    targets: [正厅级, 副部级]
+    quota: 1
+    valid_from: 1993-01-01
+
+  # ---- 进修班：在岗提高。副处级以上的履历门槛之一。----
+  - key: jx_city
+    name: 干部进修班
+    school: MUNICIPAL
+    type: 进修班
+    days: 60
+    targets: [副科级, 正科级]
+    quota: 3
+    valid_from: 1986-01-01
+
+  - key: jx_prov
+    name: 省委党校进修班
+    school: PROVINCIAL
+    type: 进修班
+    days: 90
+    targets: [副处级, 正处级]
+    quota: 2
+    valid_from: 1986-01-01
+
+  - key: jx_central
+    name: 中央党校进修班
+    school: CENTRAL
+    type: 进修班
+    days: 90
+    targets: [副厅级, 正厅级]
+    quota: 1
+    valid_from: 1990-01-01
+    note: 2008 年后中央党校主要轮训厅局级以上和县（市）委书记
+
+  # ---- 中青班：组织信号最强的一个班次，但按蓝图十，它不是升官加速器。----
+  - key: zq_city
+    name: 市委党校中青年干部培训班
+    school: MUNICIPAL
+    type: 中青班
+    days: 120
+    targets: [正科级, 副处级]
+    max_age: 40
+    quota: 1
+    valid_from: 1986-01-01
+
+  - key: zq_prov
+    name: 省委党校中青年干部培训班
+    school: PROVINCIAL
+    type: 中青班
+    days: 150
+    targets: [副处级, 正处级]
+    max_age: 45
+    quota: 1
+    valid_from: 1986-01-01
+
+  - key: zq_central
+    name: 中央党校中青年干部培训班
+    school: CENTRAL
+    type: 中青班
+    days: 150
+    targets: [正处级, 副厅级]
+    max_age: 50
+    quota: 1
+    valid_from: 1996-01-01
+
+  # ---- 短班：不构成任职门槛，但算履历，也算组织观察。----
+  - key: zt_city
+    name: 专题研讨班
+    school: MUNICIPAL
+    type: 专题研讨班
+    days: 15
+    targets: [正科级, 副处级, 正处级]
+    quota: 4
+    valid_from: 1996-01-01
+
+  - key: dx_county
+    name: 党性教育专题班
+    school: COUNTY
+    type: 党性教育
+    days: 20
+    targets: [科员, 副科级, 正科级]
+    quota: 4
+    valid_from: 2013-01-01
+
+# 任职资格里的培训门槛（进 check_conditions，和年龄、资历并列）。
+# 它让党校"有用"，但完全不是加速器——只让你够格，不让你更快。
+requirements:
+  正科级: [任职培训]
+  副处级: [进修班, 中青班]
+  正处级: [进修班, 中青班]
+  副厅级: [进修班, 中青班]
+  正厅级: [任职培训, 进修班]
+  副部级: [任职培训, 进修班]
+  正部级: [任职培训, 进修班]
+
+# 校内动作。脱产期间玩家能做的事，每样占若干天。
+campus_actions:
+  听课:
+    label: 认真听课
+    days: 10
+    note: 理论和政策，听进去多少算多少
+    gain: {theory: 2}
+  研讨:
+    label: 参加研讨发言
+    days: 7
+    note: 发言是要被记住的，说好说坏都记住
+    gain: {theory: 1, attention: 1}
+  结识同学:
+    label: 结识同学
+    days: 7
+    note: 同班的人来自各地各系统，几十年后他们在哪儿说不准
+    gain: {classmates: 1}
+  调研:
+    label: 随班外出调研
+    days: 12
+    note: 到别的地方去看看，眼界是这么开的
+    gain: {theory: 1, classmates: 1}

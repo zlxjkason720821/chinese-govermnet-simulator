@@ -1,0 +1,226 @@
+"""会议（蓝图 十七）。
+
+蓝图原话：到了县级主要领导以上，游戏不应继续以个人办事为主要玩法。
+玩家拥有的不是"决定所有事情的权力"，而是
+**在一定程序中提出、协调、讨论和形成决定**。
+
+所以会议不能是装饰。这里的做法是把本来就存在的程序环节搬到会上：
+
+  任用状态机走到 DELIBERATION —— 那就是常委会讨论决定这一环（§34）
+  项目走到 APPROVAL        —— 那就是政府常务会议研究立项（§41）
+
+不上会，这两样就卡在那里不动。会议因此是承重的，不是过场。
+
+玩家的位置决定他在会上能做什么：
+  不是班子成员   议题涉及你时列席汇报，不参与决定
+  班子成员       可以提出议题、发表意见
+  主持人         定议题、拍板
+"""
+import json
+from datetime import date, timedelta
+
+from gongpu.appointment import LEVEL_ORDER, log_event
+
+# 蓝图十七点名的几种会
+PARTY_STANDING = "党委常委会"
+GOV_EXECUTIVE = "政府常务会议"
+PARTY_GROUP = "党组会议"
+SPECIAL = "专题会议"
+
+# 不同议题进入不同会议——这是蓝图十七的原话
+TOPIC_ROUTING = {
+    "appointment": PARTY_STANDING,      # 干部任免归党委
+    "project": GOV_EXECUTIVE,           # 项目立项归政府
+    "discipline": PARTY_STANDING,
+    "work": SPECIAL,
+}
+
+DECISIONS = ("同意", "原则同意", "再研究", "缓议", "不同意")
+PASSING = ("同意", "原则同意")
+
+# 参加常委会的层次门槛：副处级以上才是县级班子成员
+MEMBER_LEVEL = LEVEL_ORDER["副处级"]
+
+
+def _org_for(con, kind, admin_level="COUNTY"):
+    otype = "PARTY" if kind in (PARTY_STANDING, PARTY_GROUP) else "GOVERNMENT"
+    return con.execute(
+        "SELECT id, COALESCE(short_name,name) AS n FROM organization "
+        "WHERE organization_type=? AND admin_level=? AND protocol_order IS NOT NULL "
+        "ORDER BY id LIMIT 1", (otype, admin_level)).fetchone()
+
+
+def members_of(con, org_id, admin_level="COUNTY"):
+    """与会人。常委会是党委班子，常务会议是政府班子。"""
+    return [dict(r) for r in con.execute(
+        "SELECT c.id, c.name, h.title_at_time AS title, d.leadership_level AS lvl, "
+        " d.protocol_order AS po "
+        "FROM office_holding h JOIN character c ON c.id = h.character_id "
+        "JOIN position_slot s ON s.id = h.position_slot_id "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "JOIN organization o ON o.id = s.organization_id "
+        "WHERE h.end_date IS NULL AND s.organization_id = ? AND d.is_leadership = 1 "
+        "AND c.alive=1 AND c.retired=0 ORDER BY d.protocol_order, h.id", (org_id,))]
+
+
+def pending_agenda(con, on, kind):
+    """该上这个会的事项。全部来自库里真实卡在程序上的东西。"""
+    items = []
+    if kind == PARTY_STANDING:
+        for r in con.execute(
+                "SELECT p.id, p.position_slot_id AS slot, p.selected_id, "
+                " COALESCE(o.short_name,o.name)||d.name AS title, c.name AS who "
+                "FROM appointment_process p "
+                "JOIN position_slot s ON s.id = p.position_slot_id "
+                "JOIN organization o ON o.id = s.organization_id "
+                "JOIN position_definition d ON d.id = s.position_definition_id "
+                "LEFT JOIN character c ON c.id = p.selected_id "
+                "WHERE p.state='DELIBERATION' AND p.closed_date IS NULL "
+                "AND o.admin_level='COUNTY' ORDER BY p.id LIMIT 8"):
+            items.append({"topic": "研究%s人选" % r["title"], "source": "appointment",
+                          "source_id": r["id"], "detail": r["who"] or "候选人选"})
+    elif kind == GOV_EXECUTIVE:
+        for r in con.execute(
+                "SELECT p.id, p.name, p.scale, COALESCE(o.short_name,o.name) AS org "
+                "FROM project p LEFT JOIN organization o ON o.id = p.organization_id "
+                "WHERE p.state='RESEARCH' AND o.admin_level='COUNTY' "
+                # 论证期还没走完的不上会。上了的话，原来那条排期事件还挂着，
+                # 会议推一步、排期再推一步，五六年的项目两年就建成了。
+                "AND NOT EXISTS (SELECT 1 FROM scheduled_event se "
+                "  WHERE se.fired=0 AND se.event_type='project_step' "
+                "  AND se.data LIKE '%\"project\": ' || p.id || '%') "
+                "ORDER BY p.id LIMIT 6"):
+            items.append({"topic": "研究%s立项" % r["name"], "source": "project",
+                          "source_id": r["id"],
+                          "detail": "%s承办，体量%s" % (r["org"], "★" * r["scale"])})
+    return items
+
+
+def hold(con, on, kind, rng, rules, player_id=None):
+    """开一次会。没有议题就不开——这一点本身就说明了会议不是装饰。"""
+    org = _org_for(con, kind)
+    if org is None:
+        return None
+    agenda = pending_agenda(con, on, kind)
+    if not agenda:
+        return None
+    attendees = members_of(con, org["id"])
+    if not attendees:
+        return None
+    chair = attendees[0]
+    cur = con.execute(
+        "INSERT INTO meeting(kind,organization_id,date,chair_id,attendees) "
+        "VALUES(?,?,?,?,?)",
+        (kind, org["id"], on.isoformat(), chair["id"],
+         json.dumps([a["id"] for a in attendees])))
+    mid = cur.lastrowid
+    for it in agenda:
+        con.execute(
+            "INSERT INTO meeting_item(meeting_id,topic,source,source_id,note) "
+            "VALUES(?,?,?,?,?)",
+            (mid, it["topic"], it["source"], it["source_id"], it["detail"]))
+    log_event(con, on, "meeting",
+              {"kind": kind, "org": org["n"], "items": len(agenda),
+               "chair": chair["title"]},
+              actors=[a["id"] for a in attendees])
+    return mid
+
+
+def resolve(con, meeting_id, on, rng, rules, player_choices=None):
+    """形成决定，并把决定落回它来自的那个程序。
+
+    决定不是随机拍的：讨论的是已经走完考察的人选、已经论证过的项目，
+    所以多数会通过；卡住的那些是真有理由卡。
+    """
+    player_choices = player_choices or {}
+    out = []
+    for it in con.execute(
+            "SELECT * FROM meeting_item WHERE meeting_id=? AND decision IS NULL "
+            "ORDER BY id", (meeting_id,)).fetchall():
+        if it["id"] in player_choices:
+            d = player_choices[it["id"]]
+        else:
+            x = rng["governance"].random()
+            d = "同意" if x < 0.62 else ("原则同意" if x < 0.80
+                                        else ("再研究" if x < 0.92 else "缓议"))
+        con.execute("UPDATE meeting_item SET decision=? WHERE id=?", (d, it["id"]))
+        _apply(con, it, d, on, rng, rules)
+        out.append((it["topic"], d))
+    return out
+
+
+def _apply(con, item, decision, on, rng, rules=None):
+    """把会议决定落回程序。这一步让会议变成承重结构。"""
+    if item["source"] == "appointment":
+        if decision in PASSING:
+            # 讨论决定通过，流程往下走一步——人选就是在这一步定下来的。
+            # 必须走状态机本身，不能直接改字段，否则 selected_id 是空的。
+            from gongpu import rules as R
+            from gongpu.appointment import AppointmentProcess, ProcedureError
+            try:
+                proc = AppointmentProcess.load(con, item["source_id"], rng,
+                                               rules or R.resolve(on), on)
+                proc.advance(on)
+                # 会上通过了，后面的环节由会议接着往下排
+                from gongpu import scheduler
+                from datetime import timedelta
+                scheduler.schedule(con, on + timedelta(days=21), "appointment_step",
+                                   slot_id=proc.slot_id,
+                                   data={"project": None, "process": proc.id})
+            except ProcedureError:
+                log_event(con, on, "appointment_suspended",
+                          {"process": item["source_id"], "reason": "会上无合适人选"})
+        else:
+            # 再研究/缓议：流程原地不动，下次会再议
+            log_event(con, on, "appointment_deferred",
+                      {"process": item["source_id"], "decision": decision})
+    elif item["source"] == "project":
+        if decision in PASSING:
+            # 走 advance，不直接改字段——否则"批准"这一条决策留痕就没了，
+            # 而留痕正是项目系统全部的意义所在（§42）。
+            from gongpu import projects
+            from gongpu import rules as R
+            projects.advance(con, item["source_id"], on, rng,
+                             rules or R.resolve(on), via_meeting=True)
+            from gongpu import scheduler
+            from datetime import timedelta
+            scheduler.schedule(con, on + timedelta(days=projects.STATE_DAYS["APPROVAL"]),
+                               "project_step", data={"project": item["source_id"]})
+        else:
+            log_event(con, on, "project_deferred",
+                      {"project": item["source_id"], "decision": decision})
+
+
+def player_role(con, cid, meeting_id):
+    """玩家在这次会上是什么身份。"""
+    m = con.execute("SELECT * FROM meeting WHERE id=?", (meeting_id,)).fetchone()
+    if m is None:
+        return "无关"
+    if m["chair_id"] == cid:
+        return "主持"
+    if cid in json.loads(m["attendees"] or "[]"):
+        return "与会"
+    # 议题涉及自己的，列席汇报
+    hit = con.execute(
+        "SELECT count(*) FROM meeting_item mi "
+        "LEFT JOIN appointment_process p ON p.id = mi.source_id AND mi.source='appointment' "
+        "WHERE mi.meeting_id=? AND p.selected_id=?", (meeting_id, cid)).fetchone()[0]
+    return "列席" if hit else "无关"
+
+
+def recent(con, limit=40, org_admin_level="COUNTY"):
+    return [dict(r) for r in con.execute(
+        "SELECT m.id, m.kind, m.date, COALESCE(o.short_name,o.name) AS org, "
+        " c.name AS chair, "
+        " (SELECT count(*) FROM meeting_item mi WHERE mi.meeting_id=m.id) AS n "
+        "FROM meeting m LEFT JOIN organization o ON o.id = m.organization_id "
+        "LEFT JOIN character c ON c.id = m.chair_id "
+        "WHERE o.admin_level = ? ORDER BY m.id DESC LIMIT ?",
+        (org_admin_level, limit))]
+
+
+def items_of(con, meeting_id):
+    return [dict(r) for r in con.execute(
+        "SELECT mi.topic, mi.decision, mi.note, c.name AS proposer "
+        "FROM meeting_item mi LEFT JOIN character c ON c.id = mi.proposer_id "
+        "WHERE mi.meeting_id=? ORDER BY mi.id", (meeting_id,))]

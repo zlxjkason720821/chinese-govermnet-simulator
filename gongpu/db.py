@@ -1,0 +1,387 @@
+"""本地 SQLite 世界库（技术文档 §7、§14-§21、§65）。
+
+Master Data / Save Data 分库（§8）：本文件只建 save 库。
+用 stdlib sqlite3，不引 SQLAlchemy —— Phase 1 的表结构还没到需要 ORM 的规模。
+"""
+import sqlite3
+
+SCHEMA = """
+PRAGMA foreign_keys = ON;
+
+-- §9 世界主状态
+CREATE TABLE world_state (
+    world_id        TEXT PRIMARY KEY,
+    scenario_id     TEXT NOT NULL,
+    current_date    TEXT NOT NULL,
+    random_seed     TEXT NOT NULL,
+    random_state    TEXT,              -- §12 RNG state，JSON
+    ruleset_version TEXT,
+    schema_version  INTEGER NOT NULL DEFAULT 1,
+    player_id       INTEGER
+);
+
+-- §14 人物。状态不塞一张表（§15），履历另立 office_holding。
+CREATE TABLE character (
+    id            INTEGER PRIMARY KEY,
+    name          TEXT NOT NULL,
+    gender        TEXT,
+    birth_date    TEXT NOT NULL,
+    death_date    TEXT,
+    party_status  TEXT NOT NULL DEFAULT 'NONE',   -- NONE/PROBATIONARY/MEMBER
+    party_join_date TEXT,
+    education_level TEXT,
+    career_origin TEXT,                            -- §39 选调生是来源标签，不是职业 class
+    work_start_date TEXT,                          -- 参加工作时间，资历由履历累计
+    personality   TEXT,                            -- §32 性格参数 JSON，不作为面板数值展示
+    tier          TEXT NOT NULL DEFAULT 'C',       -- §30 A 完整模拟 / B 结构化 / C 统计池
+    is_player     INTEGER NOT NULL DEFAULT 0,
+    alive         INTEGER NOT NULL DEFAULT 1,
+    retired       INTEGER NOT NULL DEFAULT 0,
+    discipline_status TEXT NOT NULL DEFAULT 'CLEAR'
+);
+
+-- §16 机构，可改革（predecessor/successor）
+CREATE TABLE organization (
+    id            INTEGER PRIMARY KEY,
+    name          TEXT NOT NULL,             -- 正式全称
+    short_name    TEXT,                      -- 简称，也是称谓拼接用的前缀
+    admin_level   TEXT,                      -- COUNTY/MUNICIPAL/PROVINCIAL/CENTRAL
+    -- §72 背景人口抽象：只有玩家那条线上的机构才逐个环节地模拟。
+    -- 外省的班子存在、有人、会换届，但空缺直接由上级调人补，
+    -- 不跑候选池——三百个外省岗位跑完整状态机，四十年要多花一分钟。
+    simulated     INTEGER NOT NULL DEFAULT 1,
+    protocol_order INTEGER,                  -- 四套班子次序：党委1 人大2 政府3 政协4
+    organization_type TEXT,
+    system_type   TEXT,
+    parent_id     INTEGER REFERENCES organization(id),
+    institution_grade TEXT,
+    valid_from    TEXT NOT NULL,
+    valid_to      TEXT,
+    active        INTEGER NOT NULL DEFAULT 1
+);
+
+-- §17 "这种职位是什么"
+CREATE TABLE position_definition (
+    id            INTEGER PRIMARY KEY,
+    name          TEXT NOT NULL,
+    system_type   TEXT,
+    leadership_level TEXT,
+    protocol_order INTEGER,                  -- 本套班子内部排序
+    is_leadership INTEGER NOT NULL DEFAULT 0,
+    management_authority TEXT NOT NULL,   -- §21 中管/省管/市管/县管
+    min_age       INTEGER,
+    max_age       INTEGER,
+    party_requirement INTEGER NOT NULL DEFAULT 0,
+    min_years_experience INTEGER NOT NULL DEFAULT 0,
+    valid_from    TEXT NOT NULL,
+    valid_to      TEXT
+);
+
+-- §18 "某单位里真实存在的一个岗位"
+CREATE TABLE position_slot (
+    id            INTEGER PRIMARY KEY,
+    position_definition_id INTEGER NOT NULL REFERENCES position_definition(id),
+    organization_id INTEGER NOT NULL REFERENCES organization(id),
+    valid_from    TEXT NOT NULL,
+    valid_to      TEXT,
+    status        TEXT NOT NULL DEFAULT 'VACANT',   -- VACANT/OCCUPIED/FROZEN
+    holder_id     INTEGER REFERENCES character(id),
+    -- 蓝图十二：领导个人秘书和办公厅干部不是一回事。
+    -- 这是服务性质的岗位，跟人走——领导调走或者下台，这个位子就没有意义了。
+    -- 指向所服务的领导岗位；办公厅自己的处室岗位这一列为空。
+    serves_slot_id INTEGER REFERENCES position_slot(id)
+);
+
+-- §20 任职历史。同一人可并存多条 = 兼任。
+CREATE TABLE office_holding (
+    id            INTEGER PRIMARY KEY,
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    -- 可以为空：入职前经历、外单位任职、上级调入前的履历，
+    -- 这些职务不在本世界的编制里。挂到本县某个岗位上会让"历任某职"
+    -- 出现"1952 年就当县长"这种记录。
+    position_slot_id INTEGER REFERENCES position_slot(id),
+    start_date    TEXT NOT NULL,
+    end_date      TEXT,
+    holding_type  TEXT NOT NULL DEFAULT 'FORMAL',
+    exit_reason   TEXT,
+    primary_position INTEGER NOT NULL DEFAULT 1,
+    -- §26 历史称谓不能被覆盖：留任职当时的职务名
+    title_at_time TEXT
+);
+
+-- §38 党校培训是真实实体，不是 training+1
+-- 班次定义（哪个党校、什么类型、轮训谁）带年代：1986 不能用 2008 的轮训范围。
+CREATE TABLE training_program (
+    id            INTEGER PRIMARY KEY,
+    key           TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    school_level  TEXT NOT NULL,      -- CENTRAL/PROVINCIAL/MUNICIPAL/COUNTY
+    program_type  TEXT NOT NULL,      -- 任职培训/进修班/中青班/专题研讨班/党性教育
+    days          INTEGER NOT NULL,
+    targets       TEXT NOT NULL,      -- 轮训对象层次，逗号分隔
+    max_age       INTEGER,
+    quota         INTEGER NOT NULL DEFAULT 1,
+    valid_from    TEXT NOT NULL,
+    valid_to      TEXT
+);
+
+-- 具体开的某一期。名额是真实资源，不是人人想上就能上。
+CREATE TABLE training_session (
+    id            INTEGER PRIMARY KEY,
+    program_id    INTEGER NOT NULL REFERENCES training_program(id),
+    start_date    TEXT NOT NULL,
+    end_date      TEXT NOT NULL,
+    quota         INTEGER NOT NULL
+);
+
+CREATE TABLE training_enrollment (
+    id            INTEGER PRIMARY KEY,
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    session_id    INTEGER REFERENCES training_session(id),
+    program       TEXT NOT NULL,      -- 班次名称，定格在参加当时（§26）
+    program_type  TEXT,
+    school_level  TEXT,
+    start_date    TEXT NOT NULL,
+    end_date      TEXT,
+    completed     INTEGER NOT NULL DEFAULT 0,
+    result        TEXT,               -- 优秀学员 / 结业 / 中途退出
+    theory        INTEGER NOT NULL DEFAULT 0,      -- 校内投入，只影响结业等次
+    classmates    INTEGER NOT NULL DEFAULT 0,
+    requested     INTEGER NOT NULL DEFAULT 0,      -- 1 = 本人申请，0 = 组织调训
+    entitlement_used INTEGER NOT NULL DEFAULT 0    -- 结业带来的那次提级机会用掉了没有
+);
+
+-- §21 干部管理权限：中管/省管/市管/县管/部门管理/双重管理
+CREATE TABLE cadre_management_authority (
+    id            INTEGER PRIMARY KEY,
+    level         TEXT NOT NULL,
+    organization_id INTEGER NOT NULL REFERENCES organization(id),
+    authority_type TEXT NOT NULL DEFAULT 'SINGLE'
+);
+
+-- §34 任免流程状态机实例
+CREATE TABLE appointment_process (
+    id            INTEGER PRIMARY KEY,
+    position_slot_id INTEGER NOT NULL REFERENCES position_slot(id),
+    state         TEXT NOT NULL,
+    opened_date   TEXT NOT NULL,
+    closed_date   TEXT,
+    selected_id   INTEGER REFERENCES character(id)
+);
+
+-- 职级/非领导职务履历。§26 套转不得改写历史称谓，所以旧记录只封口不覆盖。
+CREATE TABLE rank_holding (
+    id            INTEGER PRIMARY KEY,
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    rank_name     TEXT NOT NULL,
+    rank_system   TEXT NOT NULL,          -- 1993 / 2006 / 2019
+    start_date    TEXT NOT NULL,
+    end_date      TEXT,
+    source        TEXT                    -- INITIAL / PROMOTION / CONVERSION(套转)
+);
+
+-- §15 考核必须独立成表。年度考核是真实制度，不是一个隐藏的"实绩值"。
+CREATE TABLE assessment (
+    id            INTEGER PRIMARY KEY,
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    year          INTEGER NOT NULL,
+    result        TEXT NOT NULL,     -- 优秀 / 称职 / 基本称职 / 不称职
+    organization_id INTEGER REFERENCES organization(id),
+    UNIQUE(character_id, year)
+);
+
+-- §58 任务窗口的实体。自由文本无法判定，所以事项必须是库里的真实对象：
+-- 有类型、有时限、有归口单位、有状态。动作作用在它上面，判定才有依据。
+CREATE TABLE work_item (
+    id            INTEGER PRIMARY KEY,
+    kind          TEXT NOT NULL,
+    subject       TEXT NOT NULL,
+    organization_id INTEGER REFERENCES organization(id),
+    assignee_id   INTEGER NOT NULL REFERENCES character(id),
+    created_date  TEXT NOT NULL,
+    due_date      TEXT NOT NULL,
+    state         TEXT NOT NULL DEFAULT 'PENDING',   -- PENDING/DONE/OVERDUE/TRANSFERRED
+    progress      INTEGER NOT NULL DEFAULT 0,        -- 推进次数，够了才办得结
+    resolved_date TEXT,
+    outcome       TEXT
+);
+
+-- 玩家做过的事。§42 决策留痕：以后审计、巡视、调查可以追溯。
+CREATE TABLE action_log (
+    id            INTEGER PRIMARY KEY,
+    date          TEXT NOT NULL,
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    action_type   TEXT NOT NULL,
+    target        TEXT,
+    subject       TEXT,
+    method        TEXT,
+    outcome       TEXT,
+    work_item_id  INTEGER REFERENCES work_item(id)
+);
+
+-- §40 人际关系用图结构。注意文档的要求：不要直接写"派系"。
+-- 记的是熟悉程度和工作信任，两个独立的量：
+-- 天天见面不等于办事托得住，托得住也不等于私交好。
+CREATE TABLE relationship (
+    id            INTEGER PRIMARY KEY,
+    character_a   INTEGER NOT NULL REFERENCES character(id),
+    character_b   INTEGER NOT NULL REFERENCES character(id),
+    type          TEXT NOT NULL,      -- 同事/上下级/党校同学/大学同学/老乡/mentor/合作关系
+    familiarity   INTEGER NOT NULL DEFAULT 0,   -- 0-100 熟悉程度
+    working_trust INTEGER NOT NULL DEFAULT 0,   -- 0-100 工作上托不托得住
+    last_contact  TEXT,
+    history       TEXT,
+    UNIQUE(character_a, character_b)
+);
+
+-- §41 重大项目。可能跨越多年，状态机自己走。
+CREATE TABLE project (
+    id            INTEGER PRIMARY KEY,
+    name          TEXT NOT NULL,
+    organization_id INTEGER REFERENCES organization(id),
+    region        TEXT,
+    state         TEXT NOT NULL DEFAULT 'PROPOSED',
+    scale         INTEGER NOT NULL DEFAULT 1,     -- 体量，越大牵涉越广
+    risk          INTEGER NOT NULL DEFAULT 0,     -- 0-100，埋下问题的概率
+    proposed_date TEXT NOT NULL,
+    closed_date   TEXT,
+    outcome       TEXT
+);
+
+-- §42 决策留痕。以后审计、巡视、调查可以追溯到具体的人。
+-- 这张表是纪律系统的证据来源：十年后查起来，签字的是谁一目了然。
+CREATE TABLE project_decision (
+    id            INTEGER PRIMARY KEY,
+    project_id    INTEGER NOT NULL REFERENCES project(id),
+    role          TEXT NOT NULL,      -- 提出/批准/签批/实施/监督
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    date          TEXT NOT NULL,
+    note          TEXT
+);
+
+-- §43 纪律。取消"廉政值"，记的是具体行为。
+-- §44 违规与发现分离：behavior_date 是发生的时候，discovered_date 是被发现的时候，
+-- 这两个日期可以差十年。没被发现之前，这个人的档案是干净的。
+CREATE TABLE conduct_record (
+    id            INTEGER PRIMARY KEY,
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    behavior      TEXT NOT NULL,
+    severity      TEXT NOT NULL,      -- 轻微/一般/严重
+    behavior_date TEXT NOT NULL,
+    project_id    INTEGER REFERENCES project(id),
+    evidence      INTEGER NOT NULL DEFAULT 0,  -- 线索强度，决定查得出来查不出来
+    discovered_date TEXT,             -- 空 = 还没人知道
+    discovered_by TEXT,               -- 审计/巡视/信访/换届考察
+    status        TEXT NOT NULL DEFAULT 'LATENT',  -- LATENT/CLUE/UNDER_REVIEW/CLOSED
+    closed_date   TEXT,               -- 案件了结日期，与发现日期不是一回事
+    result        TEXT                -- 了结方式：谈话提醒/警告/严重警告/撤职/开除
+);
+
+-- 蓝图二十三：中央委员会体系**独立于行政级别**。
+-- 一个省部级干部可以不是中央委员；一个中央委员也不等于"比谁高一级"。
+-- 所以这是一张单独的表，和 office_holding 并行，人物界面上两样都要显示。
+CREATE TABLE party_central_status (
+    id            INTEGER PRIMARY KEY,
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    status        TEXT NOT NULL,      -- 中央候补委员/中央委员/政治局委员/政治局常委/总书记
+    congress      INTEGER NOT NULL,   -- 第几次全国代表大会
+    start_date    TEXT NOT NULL,
+    end_date      TEXT
+);
+
+-- 会议（蓝图十七）。到了县级主要领导以上，玩法不再是个人办事，
+-- 而是"在一定程序中提出、协调、讨论和形成决定"。
+CREATE TABLE meeting (
+    id            INTEGER PRIMARY KEY,
+    kind          TEXT NOT NULL,      -- 党委常委会/政府常务会议/党组会议/专题会议
+    organization_id INTEGER REFERENCES organization(id),
+    date          TEXT NOT NULL,
+    chair_id      INTEGER REFERENCES character(id),
+    attendees     TEXT                -- 与会人 id，JSON
+);
+
+CREATE TABLE meeting_item (
+    id            INTEGER PRIMARY KEY,
+    meeting_id    INTEGER NOT NULL REFERENCES meeting(id),
+    topic         TEXT NOT NULL,
+    source        TEXT,               -- project / appointment / work_item
+    source_id     INTEGER,
+    proposer_id   INTEGER REFERENCES character(id),
+    decision      TEXT,               -- 同意/原则同意/再研究/缓议/不同意
+    note          TEXT
+);
+
+-- 换届：党代会与人代会各有周期，届次是真实资源，不是随机刷新。
+CREATE TABLE term_session (
+    id            INTEGER PRIMARY KEY,
+    kind          TEXT NOT NULL,      -- PARTY_CONGRESS / PEOPLES_CONGRESS
+    organization_id INTEGER REFERENCES organization(id),
+    ordinal       INTEGER NOT NULL,   -- 第几届
+    held_date     TEXT NOT NULL
+);
+
+-- §28 未来已知事项：任期结束、退休、培训开班、年度考核、换届、制度改革
+CREATE TABLE scheduled_event (
+    id            INTEGER PRIMARY KEY,
+    due_date      TEXT NOT NULL,
+    event_type    TEXT NOT NULL,
+    character_id  INTEGER REFERENCES character(id),
+    position_slot_id INTEGER REFERENCES position_slot(id),
+    data          TEXT,
+    fired         INTEGER NOT NULL DEFAULT 0
+);
+
+-- §36 组织视野。是"组织掌握到什么程度"，不是"组织部好感度"。
+CREATE TABLE organization_attention (
+    character_id  INTEGER PRIMARY KEY REFERENCES character(id),
+    authority_id  INTEGER REFERENCES cadre_management_authority(id),
+    visibility    INTEGER NOT NULL DEFAULT 0,      -- 0 未进入视野
+    development_status TEXT NOT NULL DEFAULT 'NORMAL',  -- §37 允许降级
+    last_review   TEXT
+);
+
+-- §65 所有重要变化落这张表：时间线/审计/存档修复都靠它
+CREATE TABLE world_event (
+    id            INTEGER PRIMARY KEY,
+    date          TEXT NOT NULL,
+    event_type    TEXT NOT NULL,
+    actors        TEXT,
+    organizations TEXT,
+    data          TEXT,
+    visibility    TEXT NOT NULL DEFAULT 'PUBLIC'
+);
+
+CREATE INDEX idx_holding_char ON office_holding(character_id);
+CREATE INDEX idx_slot_org ON position_slot(organization_id);
+CREATE INDEX idx_event_date ON world_event(date);
+CREATE INDEX idx_sched_due ON scheduled_event(due_date, fired);
+CREATE INDEX idx_rank_char ON rank_holding(character_id);
+CREATE INDEX idx_slot_status ON position_slot(status, position_definition_id);
+CREATE INDEX idx_work_assignee ON work_item(assignee_id, state);
+CREATE INDEX idx_rel_a ON relationship(character_a);
+CREATE INDEX idx_rel_b ON relationship(character_b);
+CREATE INDEX idx_conduct_char ON conduct_record(character_id, status);
+CREATE INDEX idx_decision_proj ON project_decision(project_id);
+CREATE INDEX idx_enroll_char ON training_enrollment(character_id, completed);
+CREATE INDEX idx_central_char ON party_central_status(character_id, end_date);
+CREATE INDEX idx_mitem_meeting ON meeting_item(meeting_id);
+"""
+
+
+def title_of(con, slot_id):
+    """岗位的完整称谓，写入履历时定格（§26 历史称谓不被后来的制度改写）。
+
+    用简称作前缀：中共红山县委 + 书记 = 中共红山县委书记。
+    """
+    return con.execute(
+        "SELECT COALESCE(o.short_name, o.name) || d.name FROM position_slot s "
+        "JOIN organization o ON o.id = s.organization_id "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "WHERE s.id = ?", (slot_id,)).fetchone()[0]
+
+
+def open_world(path=":memory:"):
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    con.executescript(SCHEMA)
+    return con
