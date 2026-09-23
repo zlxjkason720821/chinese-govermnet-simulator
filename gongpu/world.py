@@ -11,7 +11,7 @@ from gongpu import paths
 
 import yaml
 
-from gongpu import (leadership, migration, ministries, npc, regions,
+from gongpu import (caps, leadership, migration, ministries, npc, regions,
                     relations, rules, training)
 from gongpu.appointment import log_event
 from gongpu.clock import SimulationClock
@@ -122,6 +122,8 @@ def bootstrap(con, rng, cfg=None):
     # 以及该不该设分管日常工作的副职，都在这里定下来。
     leadership.install(con, on)
     leadership.assign_party_posts(con)
+    # 权限按岗位给，不按级别开关（V3 §5）
+    caps.install(con)
     relations.seed_colleagues(con, on)
     relations.seed_classmates(con, on, rng)
     con.execute(

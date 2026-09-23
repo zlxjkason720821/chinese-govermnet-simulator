@@ -131,16 +131,91 @@ def hold(con, on, kind, rng, rules, player_id=None):
         (kind, org["id"], on.isoformat(), chair["id"],
          json.dumps([a["id"] for a in attendees])))
     mid = cur.lastrowid
-    for it in agenda:
+    for i, it in enumerate(agenda, 1):
+        # 议题要有汇报人：上会的事由承办单位的人来讲，不是凭空过一遍。
+        reporter = _reporter_for(con, it)
         con.execute(
-            "INSERT INTO meeting_item(meeting_id,topic,source,source_id,note) "
-            "VALUES(?,?,?,?,?)",
-            (mid, it["topic"], it["source"], it["source_id"], it["detail"]))
+            "INSERT INTO meeting_item(meeting_id,topic,source,source_id,note,"
+            "matter_id,proposer_org_id,reporter_id,sequence_no) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (mid, it["topic"], it["source"], it["source_id"], it["detail"],
+             it["source_id"] if it["source"] == "work_item" else None,
+             it.get("org_id"), reporter, i))
+    _seat_participants(con, mid, org["id"], chair, attendees, agenda)
     log_event(con, on, "meeting",
               {"kind": kind, "org": org["n"], "items": len(agenda),
                "chair": chair["title"]},
               actors=[a["id"] for a in attendees])
     return mid
+
+
+def _reporter_for(con, item):
+    """谁上会汇报这个议题。
+
+    项目由承办单位的正职来讲，干部任免由组织部门来讲。
+    "汇报"是一种独立的参会身份：他为这一个议题而来，
+    讲完就完了，不参与别的议题的讨论。
+    """
+    if item["source"] == "project":
+        r = con.execute(
+            "SELECT h.character_id FROM project p "
+            "JOIN position_slot s ON s.organization_id = p.organization_id "
+            "JOIN position_definition d ON d.id = s.position_definition_id "
+            "JOIN office_holding h ON h.position_slot_id = s.id AND h.end_date IS NULL "
+            "WHERE p.id=? AND d.is_leadership=1 "
+            "ORDER BY d.protocol_order LIMIT 1", (item["source_id"],)).fetchone()
+        return r[0] if r else None
+    if item["source"] == "appointment":
+        r = con.execute(
+            "SELECT h.character_id FROM office_holding h "
+            "JOIN position_slot s ON s.id = h.position_slot_id "
+            "JOIN organization o ON o.id = s.organization_id "
+            "JOIN position_definition d ON d.id = s.position_definition_id "
+            "WHERE h.end_date IS NULL AND o.archetype='ORGANIZATION_DEPT' "
+            "AND d.is_leadership=1 ORDER BY d.protocol_order LIMIT 1").fetchone()
+        return r[0] if r else None
+    return None
+
+
+def _seat_participants(con, mid, org_id, chair, members, agenda):
+    """登记参会身份。
+
+    人在会场不等于列席，列席不等于会议成员——三件事在制度上完全不同，
+    所以在库里也必须是三条不同的记录。
+    """
+    seen = set()
+    con.execute(
+        "INSERT INTO meeting_participant(meeting_id,character_id,role) VALUES(?,?,?)",
+        (mid, chair["id"], "CHAIR"))
+    seen.add(chair["id"])
+    for m in members:
+        if m["id"] in seen:
+            continue
+        con.execute(
+            "INSERT INTO meeting_participant(meeting_id,character_id,role) "
+            "VALUES(?,?,?)", (mid, m["id"], "MEMBER"))
+        seen.add(m["id"])
+    # 汇报人：为某一个议题而来
+    for it in agenda:
+        who = _reporter_for(con, it)
+        if who and who not in seen:
+            con.execute(
+                "INSERT INTO meeting_participant(meeting_id,character_id,role,"
+                "agenda_scope) VALUES(?,?,?,?)", (mid, who, "REPORTER", it["topic"]))
+            seen.add(who)
+    # 会务：办公厅的人负责文件、记录、纪要，没有成员权利
+    for r in con.execute(
+            "SELECT h.character_id AS cid FROM office_holding h "
+            "JOIN position_slot s ON s.id = h.position_slot_id "
+            "JOIN organization o ON o.id = s.organization_id "
+            "WHERE h.end_date IS NULL AND o.system_type='综合' AND o.parent_id=? "
+            "ORDER BY h.id LIMIT 3", (org_id,)).fetchall():
+        if r["cid"] in seen:
+            continue
+        con.execute(
+            "INSERT INTO meeting_participant(meeting_id,character_id,role) "
+            "VALUES(?,?,?)", (mid, r["cid"], "STAFF"))
+        seen.add(r["cid"])
 
 
 def resolve(con, meeting_id, on, rng, rules, player_choices=None):
@@ -160,10 +235,79 @@ def resolve(con, meeting_id, on, rng, rules, player_choices=None):
             x = rng["governance"].random()
             d = "同意" if x < 0.62 else ("原则同意" if x < 0.80
                                         else ("再研究" if x < 0.92 else "缓议"))
-        con.execute("UPDATE meeting_item SET decision=? WHERE id=?", (d, it["id"]))
+        text, org_id, days = _decision_detail(con, it, d, on)
+        con.execute(
+            "UPDATE meeting_item SET decision=?,decision_text=?,"
+            "responsible_org_id=?,deadline_date=?,status='DECIDED' WHERE id=?",
+            (d, text, org_id, (on + timedelta(days=days)).isoformat() if days else None,
+             it["id"]))
         _apply(con, it, d, on, rng, rules)
+        # 闭环：决定定了谁去办、几天内办完，就要落成一件真的事项，
+        # 并且挂上督办。不然"会上定了"就只是一行字。
+        if org_id and days:
+            _spawn_followup(con, it, d, text, org_id, on, days, meeting_id)
         out.append((it["topic"], d))
     return out
+
+
+# 决定不是一个词就完了：它要说清楚谁去办、几天内办完。
+DECISION_FOLLOWUP = {
+    "同意": ("按会议决定办理", 30),
+    "原则同意": ("原则同意，按会议提出的意见修改完善后报送", 21),
+    "再研究": ("再作研究，补充材料后重新提请", 45),
+    "缓议": ("暂缓，待条件成熟再议", 90),
+    "不同意": (None, 0),
+}
+
+
+def _decision_detail(con, item, decision, on):
+    """把决定写成一句能落地的话，并指明承办单位和时限。"""
+    text, days = DECISION_FOLLOWUP.get(decision, (None, 0))
+    if text is None:
+        return "不同意，本次不予办理", None, 0
+    org = None
+    if item["source"] == "project":
+        r = con.execute("SELECT organization_id FROM project WHERE id=?",
+                        (item["source_id"],)).fetchone()
+        org = r[0] if r else None
+    elif item["source"] == "work_item":
+        r = con.execute("SELECT organization_id FROM work_item WHERE id=?",
+                        (item["source_id"],)).fetchone()
+        org = r[0] if r else None
+    return text, org, days
+
+
+def _spawn_followup(con, item, decision, text, org_id, on, days, meeting_id):
+    """会议决定 → 新的事项 + 督办。
+
+    这是整个设计的闭环所在：决定拆成落实事项，事项进督办，
+    督办到期要销号。否则会议就成了一个只会输出文字的装置。
+    """
+    who = con.execute(
+        "SELECT h.character_id AS cid FROM office_holding h "
+        "JOIN position_slot s ON s.id = h.position_slot_id "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "WHERE h.end_date IS NULL AND s.organization_id=? AND d.is_leadership=1 "
+        "ORDER BY d.protocol_order LIMIT 1", (org_id,)).fetchone()
+    if who is None:
+        return None
+    due = (on + timedelta(days=days)).isoformat()
+    mid = con.execute(
+        "INSERT INTO work_item(kind,subject,organization_id,assignee_id,"
+        "created_date,due_date,matter_type,origin_org_id,target_org_id,"
+        "current_stage,parent_matter_id,importance,urgency) "
+        "VALUES('督办',?,?,?,?,?,'SUPERVISION',?,?,'落实',?,?,?)",
+        ("落实会议决定：%s" % item["topic"], org_id, who["cid"],
+         on.isoformat(), due,
+         con.execute("SELECT organization_id FROM meeting WHERE id=?",
+                     (meeting_id,)).fetchone()[0],
+         org_id, item["matter_id"],
+         70 if decision == "同意" else 55, 60)).lastrowid
+    con.execute(
+        "INSERT INTO decision_log(event_date,matter_id,meeting_id,action_type,"
+        "field,after_value,reason) VALUES(?,?,?,'MEETING_DECISION',?,?,?)",
+        (on.isoformat(), mid, meeting_id, item["topic"], decision, text))
+    return mid
 
 
 def _apply(con, item, decision, on, rng, rules=None):

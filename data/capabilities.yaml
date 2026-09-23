@@ -1,0 +1,242 @@
+# 权限（Capability）
+#
+# 禁止这样写：
+#
+#     if rank >= 厅级:
+#         开放会议
+#
+# 一个正处级的县委书记进常委会，一个正处级的省厅处长不进；
+# 能不能开会，取决于这个岗位有没有这项权限，不取决于他几级。
+#
+# 界面上某个页签显不显示，也按这个来：
+#
+#     visible = 有相关实体 or 有权限 or 有会务任务
+#
+# scope 限定这项权限管得到多大范围：
+#   OWN           只管自己的
+#   UNIT          本单位
+#   SUBORDINATE   下属单位
+#   JURISDICTION  本辖区（党委政府的正副职才有）
+
+capabilities:
+  MATTER_VIEW: 看得到事项
+  MATTER_ASSIGN: 把事项交办下去
+  MATTER_TRANSFER: 转办给别的单位
+  MATTER_APPROVE: 对事项作出批示
+  MATTER_RETURN: 退回
+  MATTER_ESCALATE: 报请上级
+
+  PROJECT_VIEW: 看得到项目
+  PROJECT_PARTICIPATE: 作为参与单位办事
+  PROJECT_MANAGE: 项目管理，报送材料、推进环节
+  PROJECT_PROPOSE: 提出项目动议
+  PROJECT_SUBMIT: 报送立项
+  PROJECT_STAGE_APPROVE: 批准项目进入下一环节
+  PROJECT_COORDINATE: 召集协调
+  PROJECT_SUPERVISE: 督办项目
+
+  MEETING_VIEW: 看得到会议
+  MEETING_PREPARE: 会务、材料、纪要
+  MEETING_PROPOSE_AGENDA: 提出议题
+  MEETING_ATTEND: 列席
+  MEETING_REPORT: 上会汇报
+  MEETING_CHAIR: 主持会议
+  MEETING_DELIBERATE: 正式讨论
+  MEETING_VOTE: 参与表决
+  MEETING_MINUTES: 签发纪要
+
+  PERSONNEL_VIEW: 看得到干部信息
+  PERSONNEL_PROPOSE: 提出干部调整建议
+  PERSONNEL_RECOMMEND: 民主推荐
+  PERSONNEL_INSPECT: 考察
+  PERSONNEL_DELIBERATE: 上会讨论干部
+  PERSONNEL_VOTE: 表决
+  PERSONNEL_APPOINT_PROCESS: 办理任免手续
+
+  DOCUMENT_DRAFT: 起草公文
+  DOCUMENT_REVIEW: 核稿
+  DOCUMENT_SIGN: 签发
+  DOCUMENT_ISSUE: 印发
+
+  SUPERVISION_CREATE: 交办督办
+  SUPERVISION_REPLY: 报送办理情况
+  SUPERVISION_CLOSE: 销号
+
+  BUDGET_VIEW: 看得到预算
+  BUDGET_PROPOSE: 提出预算安排
+  BUDGET_REVIEW: 审核预算
+
+  AUDIT_VIEW: 看得到审计事项
+  AUDIT_RECTIFY: 整改
+
+# ── 按岗位给权限 ──────────────────────────────────────
+# by_post 按职务名给；by_archetype 按机关类型给（所有公安机关的局长）。
+# 同一个人可以从几条规则里拿到权限，取并集。
+
+by_post:
+  # 最底下一层：能看、能办自己手上的事，仅此而已。
+  科员:
+    - {cap: MATTER_VIEW, scope: OWN}
+    - {cap: SUPERVISION_REPLY, scope: OWN}
+    - {cap: DOCUMENT_DRAFT, scope: OWN}
+    - {cap: PROJECT_PARTICIPATE, scope: OWN}
+    # 会务不给普通科员——民政局的科员和那些会没关系。
+    # 办公厅的科员通过 by_archetype 拿到 MEETING_PREPARE。
+  秘书:
+    - {cap: MATTER_VIEW, scope: OWN}
+    - {cap: DOCUMENT_DRAFT, scope: OWN}
+
+  # 处长、科长这一层：开始有"分派"和"汇报"。
+  处长:
+    - {cap: MATTER_VIEW, scope: UNIT}
+    - {cap: MATTER_ASSIGN, scope: UNIT}
+    - {cap: DOCUMENT_REVIEW, scope: UNIT}
+    - {cap: PROJECT_MANAGE, scope: UNIT}
+    - {cap: MEETING_REPORT, scope: UNIT}
+    - {cap: MEETING_PROPOSE_AGENDA, scope: UNIT}
+    - {cap: SUPERVISION_REPLY, scope: UNIT}
+  副处长:
+    - {cap: MATTER_VIEW, scope: UNIT}
+    - {cap: MATTER_ASSIGN, scope: UNIT}
+    - {cap: DOCUMENT_DRAFT, scope: UNIT}
+    - {cap: PROJECT_PARTICIPATE, scope: UNIT}
+
+  # 部门副职：分管一摊。能批示、能协调，但不能代表单位签发。
+  副局长: &deputy_head
+    - {cap: MATTER_VIEW, scope: UNIT}
+    - {cap: MATTER_ASSIGN, scope: UNIT}
+    - {cap: MATTER_APPROVE, scope: UNIT}
+    - {cap: DOCUMENT_REVIEW, scope: UNIT}
+    - {cap: PROJECT_MANAGE, scope: UNIT}
+    - {cap: PROJECT_SUBMIT, scope: UNIT}
+    - {cap: MEETING_REPORT, scope: UNIT}
+    - {cap: MEETING_ATTEND, scope: SUBORDINATE}
+    - {cap: SUPERVISION_REPLY, scope: UNIT}
+    - {cap: BUDGET_VIEW, scope: UNIT}
+  副主任: *deputy_head
+  副部长: *deputy_head
+  副院长: *deputy_head
+  副检察长: *deputy_head
+  副书记: *deputy_head
+
+  # 部门正职：对本单位负全责，能签发，能上会汇报。
+  # 注意"列席"只到 SUBORDINATE——局长不因为是局长就能进常委会。
+  局长: &dept_head
+    - {cap: MATTER_VIEW, scope: UNIT}
+    - {cap: MATTER_ASSIGN, scope: UNIT}
+    - {cap: MATTER_APPROVE, scope: UNIT}
+    - {cap: MATTER_TRANSFER, scope: UNIT}
+    - {cap: MATTER_ESCALATE, scope: UNIT}
+    - {cap: DOCUMENT_SIGN, scope: UNIT}
+    - {cap: DOCUMENT_ISSUE, scope: UNIT}
+    - {cap: PROJECT_PROPOSE, scope: UNIT}
+    - {cap: PROJECT_SUBMIT, scope: UNIT}
+    - {cap: PROJECT_MANAGE, scope: UNIT}
+    - {cap: MEETING_CHAIR, scope: UNIT}        # 主持本单位的局长办公会
+    - {cap: MEETING_REPORT, scope: SUBORDINATE}
+    - {cap: MEETING_ATTEND, scope: SUBORDINATE}
+    - {cap: MEETING_PROPOSE_AGENDA, scope: UNIT}
+    - {cap: SUPERVISION_REPLY, scope: UNIT}
+    - {cap: PERSONNEL_VIEW, scope: UNIT}
+    - {cap: PERSONNEL_PROPOSE, scope: UNIT}
+    - {cap: BUDGET_PROPOSE, scope: UNIT}
+  主任: *dept_head
+  部长: *dept_head
+  院长: *dept_head
+  检察长: *dept_head
+
+  # 政府副职：分管一摊，能召集协调会，能批项目环节。
+  副县长: &gov_deputy
+    - {cap: MATTER_VIEW, scope: JURISDICTION}
+    - {cap: MATTER_ASSIGN, scope: SUBORDINATE}
+    - {cap: MATTER_APPROVE, scope: SUBORDINATE}
+    - {cap: PROJECT_VIEW, scope: JURISDICTION}
+    - {cap: PROJECT_COORDINATE, scope: SUBORDINATE}
+    - {cap: PROJECT_STAGE_APPROVE, scope: SUBORDINATE}
+    - {cap: PROJECT_SUPERVISE, scope: SUBORDINATE}
+    - {cap: MEETING_CHAIR, scope: SUBORDINATE}   # 专题协调会
+    - {cap: MEETING_DELIBERATE, scope: JURISDICTION}
+    - {cap: MEETING_VOTE, scope: JURISDICTION}
+    - {cap: SUPERVISION_CREATE, scope: SUBORDINATE}
+    - {cap: BUDGET_REVIEW, scope: JURISDICTION}
+  常务副县长: *gov_deputy
+  副市长: *gov_deputy
+  副省长: *gov_deputy
+  秘书长: *gov_deputy
+
+  # 政府正职：政府全体会议、常务会议，主持。
+  县长: &gov_head
+    - {cap: MATTER_VIEW, scope: JURISDICTION}
+    - {cap: MATTER_ASSIGN, scope: JURISDICTION}
+    - {cap: MATTER_APPROVE, scope: JURISDICTION}
+    - {cap: PROJECT_VIEW, scope: JURISDICTION}
+    - {cap: PROJECT_STAGE_APPROVE, scope: JURISDICTION}
+    - {cap: PROJECT_COORDINATE, scope: JURISDICTION}
+    - {cap: PROJECT_SUPERVISE, scope: JURISDICTION}
+    - {cap: MEETING_CHAIR, scope: JURISDICTION}
+    - {cap: MEETING_DELIBERATE, scope: JURISDICTION}
+    - {cap: MEETING_VOTE, scope: JURISDICTION}
+    - {cap: MEETING_MINUTES, scope: JURISDICTION}
+    - {cap: SUPERVISION_CREATE, scope: JURISDICTION}
+    - {cap: SUPERVISION_CLOSE, scope: JURISDICTION}
+    - {cap: PERSONNEL_VIEW, scope: JURISDICTION}
+    - {cap: PERSONNEL_PROPOSE, scope: JURISDICTION}
+    - {cap: BUDGET_REVIEW, scope: JURISDICTION}
+  市长: *gov_head
+  省长: *gov_head
+
+  # 党委常委：进常委会，有讨论和表决权。
+  # 这是"能不能进常委会"的唯一依据——不看级别，看是不是常委。
+  常委: &standing
+    - {cap: MATTER_VIEW, scope: JURISDICTION}
+    - {cap: MEETING_DELIBERATE, scope: JURISDICTION}
+    - {cap: MEETING_VOTE, scope: JURISDICTION}
+    - {cap: MEETING_PROPOSE_AGENDA, scope: JURISDICTION}
+    - {cap: PERSONNEL_VIEW, scope: JURISDICTION}
+    - {cap: PERSONNEL_DELIBERATE, scope: JURISDICTION}
+    - {cap: PERSONNEL_VOTE, scope: JURISDICTION}
+    - {cap: PROJECT_VIEW, scope: JURISDICTION}
+
+  # 党委正职：主持常委会、全会，签发纪要。
+  书记:
+    - {cap: MATTER_VIEW, scope: JURISDICTION}
+    - {cap: MATTER_APPROVE, scope: JURISDICTION}
+    - {cap: MEETING_CHAIR, scope: JURISDICTION}
+    - {cap: MEETING_DELIBERATE, scope: JURISDICTION}
+    - {cap: MEETING_VOTE, scope: JURISDICTION}
+    - {cap: MEETING_MINUTES, scope: JURISDICTION}
+    - {cap: MEETING_PROPOSE_AGENDA, scope: JURISDICTION}
+    - {cap: PERSONNEL_VIEW, scope: JURISDICTION}
+    - {cap: PERSONNEL_DELIBERATE, scope: JURISDICTION}
+    - {cap: PERSONNEL_VOTE, scope: JURISDICTION}
+    - {cap: PERSONNEL_APPOINT_PROCESS, scope: JURISDICTION}
+    - {cap: SUPERVISION_CREATE, scope: JURISDICTION}
+    - {cap: SUPERVISION_CLOSE, scope: JURISDICTION}
+    - {cap: PROJECT_VIEW, scope: JURISDICTION}
+    - {cap: PROJECT_SUPERVISE, scope: JURISDICTION}
+
+# ── 按机关类型给 ──────────────────────────────────────
+# 组织部门的人能看干部、能考察，这跟他是不是部长无关。
+by_archetype:
+  ORGANIZATION_DEPT:
+    - {cap: PERSONNEL_VIEW, scope: JURISDICTION}
+    - {cap: PERSONNEL_INSPECT, scope: JURISDICTION, min_post: 副部长}
+    - {cap: PERSONNEL_PROPOSE, scope: JURISDICTION, min_post: 部长}
+  PARTY_OFFICE:
+    - {cap: MEETING_PREPARE, scope: JURISDICTION}
+    - {cap: MEETING_MINUTES, scope: JURISDICTION, min_post: 主任}
+    - {cap: SUPERVISION_CREATE, scope: JURISDICTION, min_post: 主任}
+  GOV_OFFICE:
+    - {cap: MEETING_PREPARE, scope: JURISDICTION}
+    - {cap: SUPERVISION_CREATE, scope: JURISDICTION, min_post: 主任}
+  DISCIPLINE_SUPERVISION:
+    - {cap: AUDIT_VIEW, scope: JURISDICTION}
+    - {cap: SUPERVISION_CREATE, scope: JURISDICTION}
+  AUDIT:
+    - {cap: AUDIT_VIEW, scope: JURISDICTION}
+  FINANCE:
+    - {cap: BUDGET_VIEW, scope: JURISDICTION}
+    - {cap: BUDGET_PROPOSE, scope: JURISDICTION, min_post: 局长}
+  DEVELOPMENT_REFORM:
+    - {cap: PROJECT_VIEW, scope: JURISDICTION}
+    - {cap: PROJECT_STAGE_APPROVE, scope: JURISDICTION, min_post: 主任}

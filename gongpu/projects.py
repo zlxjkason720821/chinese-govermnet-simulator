@@ -91,14 +91,121 @@ def propose(con, on, rng, organization_id=None):
     scale = 1 + int(w.random() * 3)
     # 体量越大，埋下问题的概率越高。这不是设定，是留痕越多越查得出来。
     risk = int(w.random() * 30) + scale * 8
+    # 任何项目都要落到具体地方和具体领域。
+    # "红山县第二人民医院迁建工程"必须知道它在哪个县、属哪个口——
+    # 没有这两样，后面的责任链、部门协同、审计都无从谈起。
+    region_org, region = _region_of(con, organization_id)
+    domain = _domain_for(name, org["n"])
+    investment = scale * (800 + int(w.random() * 2200))      # 万元
     cur = con.execute(
-        "INSERT INTO project(name,organization_id,state,scale,risk,proposed_date) "
-        "VALUES(?,?,'PROPOSED',?,?,?)",
-        (name, organization_id, scale, risk, on.isoformat()))
+        "INSERT INTO project(name,organization_id,state,scale,risk,proposed_date,"
+        "region_org_id,region,policy_domain,investment,"
+        "coordination,fiscal_pressure,audit_risk,integrity_risk) "
+        "VALUES(?,?,'PROPOSED',?,?,?,?,?,?,?,?,?,?,?)",
+        (name, organization_id, scale, risk, on.isoformat(),
+         region_org, region, domain, investment,
+         30 + scale * 12, 25 + scale * 10, scale * 6, scale * 4))
     pid = cur.lastrowid
     record_decision(con, pid, "提出", _leader_of(con, organization_id), on, "动议")
-    log_event(con, on, "project_proposed", {"project": pid, "name": name, "scale": scale})
+    _log(con, on, pid, "PROJECT_PROPOSED", "investment", None, investment,
+         "动议，初步投资估算")
+    log_event(con, on, "project_proposed",
+              {"project": pid, "name": name, "scale": scale,
+               "domain": domain, "region": region})
     return pid
+
+
+# 领域。项目属哪个口，决定它要过哪些部门、由谁分管、出事查谁。
+DOMAIN_BY_KEYWORD = [
+    ("医院 卫生 防疫", "医疗"), ("学校 教育 校舍", "教育"),
+    ("道路 公路 桥 客运", "交通"), ("水库 灌溉 河道 供排水 防洪", "水利"),
+    ("电 供热 能源", "能源"), ("危房 住房 安置 棚户", "住房"),
+    ("垃圾 污水 环保 生态", "生态环保"), ("园区 工业 产业", "产业园区"),
+    ("农田 农业 农村 粮", "农业农村"), ("文化 旅游 体育", "文化旅游"),
+    ("派出所 消防 应急 防灾", "公共安全"), ("街 城区 旧城 改造", "城市更新"),
+]
+
+
+def _domain_for(name, org_name):
+    for keys, domain in DOMAIN_BY_KEYWORD:
+        if any(k in name for k in keys.split()):
+            return domain
+    if "民政" in org_name:
+        return "社会服务"
+    return "社会服务"
+
+
+def _region_of(con, org_id):
+    """项目落在哪个县。乡镇、工作部门都往上归到本县。
+
+    找的是本级的政府（四套班子之一，protocol_order 不为空），
+    不能靠"父机构为空"来判断——加了市级之后县委的父机构是市委。
+    """
+    cur = org_id
+    for _ in range(5):
+        r = con.execute(
+            "SELECT id, COALESCE(short_name,name) AS n, admin_level AS al, "
+            " protocol_order AS po, parent_id FROM organization WHERE id=?",
+            (cur,)).fetchone()
+        if r is None:
+            return None, None
+        if r["al"] == "COUNTY" and r["po"] is not None:
+            return r["id"], r["n"]
+        if r["parent_id"] is None:
+            return r["id"], r["n"]
+        cur = r["parent_id"]
+    return None, None
+
+
+def _log(con, on, pid, action, field, before, after, reason=None, actor=None):
+    """决策留痕。重要事实不可静默覆盖：投资从八亿改到十亿再改到九点四亿，
+    每一次都要留下，十年后查起来才有据可依。"""
+    con.execute(
+        "INSERT INTO decision_log(event_date,project_id,actor_id,action_type,"
+        "field,before_value,after_value,reason) VALUES(?,?,?,?,?,?,?,?)",
+        (on.isoformat(), pid, actor, action, field,
+         None if before is None else str(before),
+         None if after is None else str(after), reason))
+
+
+def change_investment(con, pid, on, new_value, reason, actor=None):
+    """调整投资。前后值都留痕，当前值和历史值同时保存。"""
+    old = con.execute("SELECT investment FROM project WHERE id=?", (pid,)).fetchone()[0]
+    con.execute("UPDATE project SET investment=? WHERE id=?", (new_value, pid))
+    _log(con, on, pid, "INVESTMENT_CHANGED", "investment", old, new_value, reason, actor)
+    return old, new_value
+
+
+# 十二项结果指标。不能只有一个"政绩值"：
+# 一个项目可以进度快但成本失控，可以建成了但后续运营是个包袱，
+# 可以程序合规但群众不满意。这些维度互相冲突，压成一个数就全没了。
+INDICATORS = ("progress", "cost_control", "quality", "safety",
+              "procedure_compliance", "fiscal_pressure", "social_effect",
+              "ecological_effect", "coordination", "audit_risk",
+              "integrity_risk", "operation_burden")
+INDICATOR_CN = {
+    "progress": "进度", "cost_control": "成本控制", "quality": "质量",
+    "safety": "安全", "procedure_compliance": "程序合规",
+    "fiscal_pressure": "财政压力", "social_effect": "社会效果",
+    "ecological_effect": "生态影响", "coordination": "协调难度",
+    "audit_risk": "审计风险", "integrity_risk": "廉政风险",
+    "operation_burden": "后续运营负担",
+}
+
+
+def indicators(con, pid):
+    r = con.execute("SELECT %s FROM project WHERE id=?" % ",".join(INDICATORS),
+                    (pid,)).fetchone()
+    if r is None:
+        return []
+    return [{"指标": INDICATOR_CN[k], "值": r[k], "code": k} for k in INDICATORS]
+
+
+def history(con, pid):
+    """这个项目的决策链。审计、后评价、责任追溯读的就是它。"""
+    return [dict(r) for r in con.execute(
+        "SELECT event_date, action_type, field, before_value, after_value, reason "
+        "FROM decision_log WHERE project_id=? ORDER BY id", (pid,))]
 
 
 def advance(con, project_id, on, rng, rules, via_meeting=False):

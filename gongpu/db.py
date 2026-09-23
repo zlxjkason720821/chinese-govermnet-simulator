@@ -238,6 +238,14 @@ CREATE TABLE assessment (
 
 -- §58 任务窗口的实体。自由文本无法判定，所以事项必须是库里的真实对象：
 -- 有类型、有时限、有归口单位、有状态。动作作用在它上面，判定才有依据。
+-- 事项（Matter）。整个系统的核心对象，不是"一条任务文本"。
+--
+-- "[上级督办] 市委督查室交办的问题线索 剩2天"这一行字，后台至少要有：
+-- 谁交办的、交给哪个机关、哪位领导负责、哪个处室承办、现在办到哪一步、
+-- 由哪件事派生出来、有哪些风险。玩家点开之后，可用动作才按他的岗位生成。
+--
+-- 项目是长期事项的容器，会议是处理事项的一种制度化机制，
+-- 待办只是某个岗位对事项的一个视图。
 CREATE TABLE work_item (
     id            INTEGER PRIMARY KEY,
     kind          TEXT NOT NULL,
@@ -249,8 +257,81 @@ CREATE TABLE work_item (
     state         TEXT NOT NULL DEFAULT 'PENDING',   -- PENDING/DONE/OVERDUE/TRANSFERRED
     progress      INTEGER NOT NULL DEFAULT 0,        -- 推进次数，够了才办得结
     resolved_date TEXT,
-    outcome       TEXT
+    outcome       TEXT,
+
+    -- ── 以下是 Matter 模型 ──────────────────────────
+    -- 事项类型。决定这件事走哪条流程、进哪种会、谁有权处理。
+    matter_type   TEXT,        -- DOCUMENT/INSTRUCTION/SUPERVISION/PROJECT/
+                               -- PERSONNEL/POLICY/PETITION/INSPECTION/
+                               -- EMERGENCY/DISCIPLINE/BUDGET/AUDIT/
+                               -- PLANNING/ROUTINE/COORDINATION/REPORT
+    origin_org_id INTEGER REFERENCES organization(id),   -- 谁交办的
+    target_org_id INTEGER REFERENCES organization(id),   -- 交给哪个机关
+    origin_person_id INTEGER REFERENCES character(id),
+    owner_position_id INTEGER REFERENCES position_slot(id),  -- 哪个岗位承办
+    region        TEXT,
+    policy_domain TEXT,        -- 交通/水利/医疗/教育/住房/生态环保……
+
+    -- 四个维度分开。重要不等于紧急，紧急不等于敏感。
+    importance    INTEGER NOT NULL DEFAULT 50,
+    urgency       INTEGER NOT NULL DEFAULT 50,
+    secrecy       INTEGER NOT NULL DEFAULT 0,
+    complexity    INTEGER NOT NULL DEFAULT 50,
+    political_sensitivity INTEGER NOT NULL DEFAULT 0,
+
+    current_stage TEXT,        -- 核查 / 起草 / 征求意见 / 报批 ……
+    parent_matter_id INTEGER REFERENCES work_item(id),
+    root_matter_id   INTEGER REFERENCES work_item(id),
+    project_id    INTEGER REFERENCES project(id)
 );
+CREATE INDEX idx_matter_parent ON work_item(parent_matter_id);
+CREATE INDEX idx_matter_owner ON work_item(assignee_id, state);
+
+-- V3 文档里管它叫 matter。同一张表，换个名字读着顺。
+CREATE VIEW matter AS SELECT * FROM work_item;
+
+-- 权限不按行政级别硬开关。
+--
+--     if rank >= 厅级:  开放会议        ← 错的
+--
+-- 一个正处级的县委书记进常委会，一个正处级的省厅处长不进；
+-- 能不能开会，取决于这个岗位有没有这项权限，不取决于他几级。
+CREATE TABLE capability (
+    code          TEXT PRIMARY KEY,
+    description   TEXT
+);
+
+-- 岗位 × 权限。scope 限定这项权限管得到多大范围：
+-- OWN 本人 / UNIT 本单位 / SUBORDINATE 下属单位 / JURISDICTION 本辖区
+CREATE TABLE position_capability (
+    id            INTEGER PRIMARY KEY,
+    position_definition_id INTEGER REFERENCES position_definition(id),
+    archetype     TEXT,        -- 或者按机关类型给：所有公安机关的局长
+    capability_code TEXT NOT NULL REFERENCES capability(code),
+    scope         TEXT NOT NULL DEFAULT 'UNIT',
+    valid_from    TEXT,
+    valid_to      TEXT
+);
+CREATE INDEX idx_poscap ON position_capability(position_definition_id);
+
+-- 决策留痕（Event Sourcing）。重要事实不可静默覆盖：
+-- 项目投资 8亿 → 10亿 → 9.4亿，每一次变化都要留下。
+-- 十年后审计、干部考察、责任追溯，读的就是这张表。
+CREATE TABLE decision_log (
+    id            INTEGER PRIMARY KEY,
+    event_date    TEXT NOT NULL,
+    matter_id     INTEGER REFERENCES work_item(id),
+    project_id    INTEGER REFERENCES project(id),
+    meeting_id    INTEGER REFERENCES meeting(id),
+    actor_id      INTEGER REFERENCES character(id),
+    actor_position_id INTEGER REFERENCES position_slot(id),
+    action_type   TEXT NOT NULL,
+    field         TEXT,
+    before_value  TEXT,
+    after_value   TEXT,
+    reason        TEXT
+);
+CREATE INDEX idx_declog ON decision_log(project_id, event_date);
 
 -- 玩家做过的事。§42 决策留痕：以后审计、巡视、调查可以追溯。
 CREATE TABLE action_log (
@@ -281,6 +362,12 @@ CREATE TABLE relationship (
 );
 
 -- §41 重大项目。可能跨越多年，状态机自己走。
+-- 项目是长期对象，不是一次性任务。
+--
+-- "项目完成：政绩 +20"这种写法把十几个互相冲突的维度压成了一个数。
+-- 现实里一个项目可以进度快但成本失控，可以建成了但后续运营是个包袱，
+-- 可以程序合规但群众不满意。完工之后还会有审计、后评价、质量问题、
+-- 运营成本、群众投诉、整改、责任追溯。
 CREATE TABLE project (
     id            INTEGER PRIMARY KEY,
     name          TEXT NOT NULL,
@@ -291,7 +378,30 @@ CREATE TABLE project (
     risk          INTEGER NOT NULL DEFAULT 0,     -- 0-100，埋下问题的概率
     proposed_date TEXT NOT NULL,
     closed_date   TEXT,
-    outcome       TEXT
+    outcome       TEXT,
+
+    -- 地域：任何项目至少绑定到县一级，"红山县第二人民医院迁建工程"
+    -- 必须知道它在哪个省、哪个市、哪个县。
+    region_org_id INTEGER REFERENCES organization(id),
+    location      TEXT,
+    -- 领域：交通/水利/能源/医疗/教育/住房/城市更新/产业园区/生态环保/
+    --       数字基础设施/农业农村/文化旅游/公共安全/应急能力/科技创新/社会服务
+    policy_domain TEXT,
+    investment    INTEGER,          -- 万元。改一次留一次痕，不静默覆盖。
+
+    -- 十二项结果指标。不能只有一个"政绩值"。
+    progress      INTEGER NOT NULL DEFAULT 0,
+    cost_control  INTEGER NOT NULL DEFAULT 50,
+    quality       INTEGER NOT NULL DEFAULT 50,
+    safety        INTEGER NOT NULL DEFAULT 50,
+    procedure_compliance INTEGER NOT NULL DEFAULT 50,
+    fiscal_pressure INTEGER NOT NULL DEFAULT 50,
+    social_effect INTEGER NOT NULL DEFAULT 50,
+    ecological_effect INTEGER NOT NULL DEFAULT 50,
+    coordination  INTEGER NOT NULL DEFAULT 50,
+    audit_risk    INTEGER NOT NULL DEFAULT 0,
+    integrity_risk INTEGER NOT NULL DEFAULT 0,
+    operation_burden INTEGER NOT NULL DEFAULT 0
 );
 
 -- §42 决策留痕。以后审计、巡视、调查可以追溯到具体的人。
@@ -354,8 +464,38 @@ CREATE TABLE meeting_item (
     source_id     INTEGER,
     proposer_id   INTEGER REFERENCES character(id),
     decision      TEXT,               -- 同意/原则同意/再研究/缓议/不同意
-    note          TEXT
+    note          TEXT,
+    -- ── 议程（V3 §10 meeting_agenda）──────────────
+    matter_id     INTEGER REFERENCES work_item(id),
+    proposer_org_id INTEGER REFERENCES organization(id),
+    reporter_id   INTEGER REFERENCES character(id),   -- 谁上会汇报
+    sequence_no   INTEGER,
+    status        TEXT NOT NULL DEFAULT 'PENDING',
+    -- ── 决定（V3 §10 meeting_decision）────────────
+    -- 决定不是一个字段就完了：定了谁去办、几天内办完，
+    -- 系统据此生成新的事项和督办，这才叫闭环。
+    decision_text TEXT,
+    responsible_org_id INTEGER REFERENCES organization(id),
+    deadline_date TEXT
 );
+
+-- 参会身份。人在会场不等于列席，列席不等于会议成员。
+--
+--   CHAIR     主持，控制议程，形成会议处理意见
+--   MEMBER    正式成员，讨论并参与决定
+--   ATTENDEE  列席，按议题参加，可以说明情况，不取得成员身份
+--   REPORTER  汇报议题、回答问题
+--   STAFF     会务、材料、记录、纪要，无成员权利
+--   OBSERVER  特定规则下旁听
+CREATE TABLE meeting_participant (
+    id            INTEGER PRIMARY KEY,
+    meeting_id    INTEGER NOT NULL REFERENCES meeting(id),
+    character_id  INTEGER NOT NULL REFERENCES character(id),
+    position_slot_id INTEGER REFERENCES position_slot(id),
+    role          TEXT NOT NULL,
+    agenda_scope  TEXT              -- 只为某个议题而来的，写在这里
+);
+CREATE INDEX idx_mpart ON meeting_participant(meeting_id, role);
 
 -- 换届：党代会与人代会各有周期，届次是真实资源，不是随机刷新。
 CREATE TABLE term_session (
