@@ -33,13 +33,51 @@ GENERAL_SECRETARY = "总书记"
 RANKS = [ALTERNATE, MEMBER, POLITBURO, STANDING, GENERAL_SECRETARY]
 
 # 规模按这个世界的体量缩放。真实中央委员会两百余人，这里一个省的世界装不下。
-SIZE = {ALTERNATE: 8, MEMBER: 12, POLITBURO: 5, STANDING: 3, GENERAL_SECRETARY: 1}
+# 照真实规模来。二十届是中央委员 205 人、候补委员 152 人、
+# 政治局委员 24 人（含常委 7 人）。
+#
+# 规模不能缩：光是三十一个省区市的党政正职就有六十多人，再加上
+# 中央和国务院几十个部委的正职，委员会小了就装不下这些"本来就该在里面"的人，
+# 于是省委书记会落选——那是算法的毛病，不是制度。
+SIZE = {ALTERNATE: 150, MEMBER: 205, POLITBURO: 24, STANDING: 7,
+        GENERAL_SECRETARY: 1}
 
 # 蓝图二十：七上八下必须按历史惯例建模。
 # 党代会当年年满 68 的不再进入新一届；67 及以下可以。
 AGE_CEILING = 67
 # 进入中央委员会的最低行政层次：副部级。这是"当时担任的重要岗位"那一条。
 MIN_LEVEL = LEVEL_ORDER["副部级"]
+
+
+def rules_cfg():
+    from gongpu import ministries
+    return ministries.committee_rules()
+
+
+def ex_officio_posts():
+    """默认进中央委员会的职务。
+
+    公开的构成惯例：各省、自治区、直辖市党委书记及政府首长，
+    中共中央直属机构和国务院下属机构的正部级主要负责人。
+    这不是"表现好所以当选"，是这个位子本来就在委员会里。
+    """
+    return {x["post"] for x in rules_cfg()["ex_officio"]}
+
+
+def politburo_regions():
+    """由政治局委员兼任党委书记的地方。
+
+    四个直辖市是定例，广东是经济第一大省，新疆是战略性自治区。
+    这条惯例意味着：同样是省委书记，放在哪个省，党内身份不一样。
+    """
+    return set(rules_cfg()["politburo_regions"])
+
+
+def party_years(con, cid, on):
+    r = con.execute("SELECT party_join_date FROM character WHERE id=?", (cid,)).fetchone()
+    if r is None or not r[0]:
+        return 0.0
+    return (on - date.fromisoformat(str(r[0]))).days / 365.2425
 
 
 def is_congress_year(on):
@@ -66,20 +104,45 @@ def _candidates(con, on):
     for r in con.execute(
             "SELECT c.id, c.name, c.birth_date, c.gender, "
             " d.leadership_level AS lvl, o.short_name AS org, o.admin_level AS al, "
-            " o.organization_type AS otype, h.title_at_time AS title "
+            " o.organization_type AS otype, h.title_at_time AS title, "
+            " d.name AS post, o.name AS orgfull "
             "FROM office_holding h JOIN character c ON c.id = h.character_id "
             "JOIN position_slot s ON s.id = h.position_slot_id "
             "JOIN position_definition d ON d.id = s.position_definition_id "
             "JOIN organization o ON o.id = s.organization_id "
-            "WHERE h.end_date IS NULL AND c.alive=1 AND c.retired=0 "
+            "WHERE h.end_date IS NULL AND h.primary_position=1 "
+            "AND c.alive=1 AND c.retired=0 "
             "AND c.discipline_status='CLEAR' ORDER BY c.id"):
         lvl = LEVEL_ORDER.get(r["lvl"], 0)
         if lvl < MIN_LEVEL:
             continue
         if _age(r["birth_date"], on) > AGE_CEILING:
             continue          # 七上八下
-        out.append(dict(r, order=lvl))
+        # 党章第二十二条：中央委员会委员和候补委员必须有五年以上的党龄。
+        if party_years(con, r["id"], on) < rules_cfg()["min_party_years"]:
+            continue
+        out.append(dict(r, order=lvl,
+                        ex_officio=_is_ex_officio(r),
+                        pb_region=_in_politburo_region(r)))
     return out
+
+
+def _is_ex_officio(r):
+    """这个位子本来就在中央委员会里。"""
+    if LEVEL_ORDER.get(r["lvl"], 0) < LEVEL_ORDER["正部级"]:
+        return False
+    if r["post"] not in ex_officio_posts():
+        return False
+    # 省级党政正职，或者中央机关的正部级主要负责人
+    return r["al"] in ("PROVINCIAL", "CENTRAL")
+
+
+def _in_politburo_region(r):
+    """京津沪渝粤新的党委书记，按惯例是政治局委员。"""
+    if r["post"] != "书记" or r["al"] != "PROVINCIAL":
+        return False
+    full = r["orgfull"] or ""
+    return any(name in full for name in politburo_regions())
 
 
 def _central_post_holders(con):
@@ -117,6 +180,7 @@ def _compose(con, on, congress, rng):
 
     def key(c):
         return (-c["order"],
+                not c["ex_officio"],          # 这个位子本来就在委员会里的排前面
                 -rank_of(prev.get(c["id"], "")),
                 _age(c["birth_date"], on),
                 c["id"])
@@ -126,13 +190,29 @@ def _compose(con, on, congress, rng):
     standing = [c for c in pool if c["id"] in central_posts][:SIZE[STANDING]]
     standing_ids = {c["id"] for c in standing}
 
-    # 政治局：常委 + 其余按层次补足（省委书记、中央部长都可能是政治局委员）
+    # 政治局：常委，加上按惯例兼任的几个地方党委书记，再按层次补足。
+    #
+    # 京津沪渝粤新的党委书记由政治局委员兼任——同样是省委书记，
+    # 放在哪个省，党内身份不一样。这是玩家该知道的一条路。
+    #
+    # 政治局委员的预备人选一般是 64 周岁以下的正省部级以上干部，
+    # 比中央委员那条七上八下的线更紧。
+    pb_age = rules_cfg()["politburo_max_age"]
+    eligible_pb = [c for c in pool
+                   if c["id"] not in standing_ids
+                   and _age(c["birth_date"], on) <= pb_age
+                   and c["order"] >= LEVEL_ORDER["正部级"]]
     politburo = list(standing)
-    for c in pool:
+    for c in eligible_pb:                       # 先把按惯例该进的放进去
+        if c["pb_region"] and len(politburo) < SIZE[POLITBURO]:
+            politburo.append(c)
+    seated = {c["id"] for c in politburo}
+    for c in eligible_pb:
         if len(politburo) >= SIZE[POLITBURO]:
             break
-        if c["id"] not in standing_ids:
+        if c["id"] not in seated:
             politburo.append(c)
+            seated.add(c["id"])
     pb_ids = {c["id"] for c in politburo}
 
     # 中央委员与候补：按地域部门交替取，避免某一系统包揽
@@ -207,6 +287,52 @@ def hold_congress(con, on, rng, rules):
         _seat_post(con, gs["id"], on, "总书记", primary=True)
         _seat_state_chairman(con, gs["id"], on)
     return list(assign.items())
+
+
+def fill_vacancies(con, on):
+    """中央委员出缺，由候补委员按得票多少依次递补（党章第二十二条）。
+
+    按缺额补，不盯着某一个人离开——人退了、走了、被处分了，
+    党内身份在别处就已经终止了（见 npc._close_central_status）。
+    这里只回答一个问题：这一届选了多少委员，现在还剩多少。
+
+    没有递补，委员会就只是党代会那一天的快照：三年下来
+    一百八十一个中央委员会掉到一百三十二个，而候补委员在旁边闲着。
+    """
+    cur = con.execute(
+        "SELECT max(congress) FROM party_central_status WHERE end_date IS NULL"
+    ).fetchone()[0]
+    if cur is None:
+        return []
+    elected = con.execute(
+        "SELECT count(*) FROM party_central_status WHERE congress=? AND status=? "
+        "AND start_date = (SELECT min(start_date) FROM party_central_status "
+        "                  WHERE congress=?)", (cur, MEMBER, cur)).fetchone()[0]
+    sitting = con.execute(
+        "SELECT count(*) FROM party_central_status WHERE end_date IS NULL AND status=?",
+        (MEMBER,)).fetchone()[0]
+    short = elected - sitting
+    if short <= 0:
+        return []
+    # 候补委员按当初的名次（入库顺序即得票顺序）依次递补
+    ups = con.execute(
+        "SELECT p.id, p.character_id FROM party_central_status p "
+        "JOIN character c ON c.id = p.character_id "
+        "WHERE p.end_date IS NULL AND p.status=? AND c.alive=1 AND c.retired=0 "
+        "AND c.discipline_status='CLEAR' ORDER BY p.id LIMIT ?",
+        (ALTERNATE, short)).fetchall()
+    filled = []
+    for up in ups:
+        con.execute("UPDATE party_central_status SET end_date=? WHERE id=?",
+                    (on.isoformat(), up["id"]))
+        con.execute(
+            "INSERT INTO party_central_status(character_id,status,congress,start_date) "
+            "VALUES(?,?,?,?)", (up["character_id"], MEMBER, cur, on.isoformat()))
+        log_event(con, on, "central_alternate_promoted",
+                  {"note": "中央委员出缺，由候补委员递补"},
+                  actors=[up["character_id"]])
+        filled.append(up["character_id"])
+    return filled
 
 
 def _seat_post(con, cid, on, post_name, primary=True):

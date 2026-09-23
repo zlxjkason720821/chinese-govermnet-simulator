@@ -11,7 +11,8 @@ from gongpu import paths
 
 import yaml
 
-from gongpu import migration, npc, regions, relations, rules, training
+from gongpu import (migration, ministries, npc, regions, relations, rules,
+                    training)
 from gongpu.appointment import log_event
 from gongpu.clock import SimulationClock
 from gongpu.db import open_world, title_of
@@ -105,6 +106,9 @@ def bootstrap(con, rng, cfg=None):
             if must or w.random() < FILL_RATE:
                 _seat(con, cur.lastrowid, levels[s["pos"]], on, w)
 
+    # 中央部委。带年代：1986 年是国家教委、外经贸部、冶金工业部那一套，
+    # 不是 2026 年的教育部、商务部、工信部。
+    ministries.install(con, on, rng)
     # §72 全国其余省份只建省级班子，不往下铺市县——背景世界不必实例化到底
     regions.install(con, on, rng, skip_name=regions.home_province())
     relations.seed_colleagues(con, on)
@@ -273,6 +277,8 @@ def advance_to(con, clock, target, rng):
         for p in regions.due_on(con, today, rng):
             log_event(con, today, "region_established",
                       {"name": p["name"], "note": p.get("note", "")})
+        # 机构改革也落在这四十年里：1998 年一次撤掉十几个部。
+        ministries.reform(con, today, rng)
         npc.tick(con, today, rng, r)
     con.execute(
         "UPDATE world_state SET current_date=?,ruleset_version=?,random_state=? "

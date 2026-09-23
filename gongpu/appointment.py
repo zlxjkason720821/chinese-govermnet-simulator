@@ -209,6 +209,14 @@ def _age_exact(birth, on):
     return (on - b).days / 365.2425
 
 
+def _org_admin_level(con, slot_id):
+    r = con.execute(
+        "SELECT o.admin_level FROM position_slot s "
+        "JOIN organization o ON o.id = s.organization_id WHERE s.id=?",
+        (slot_id,)).fetchone()
+    return r[0] if r else None
+
+
 def _org_type(con, slot_id):
     r = con.execute(
         "SELECT o.organization_type FROM position_slot s "
@@ -320,14 +328,19 @@ def eligible_candidates(con, slot_id, on, rules, self_id=-1):
     # 排除在外省任职的人。他们存在，但不会来竞争这边的岗位——
     # 每次开缺都全扫两千多人，四十年模拟要多花一分钟。
     # 注意用 NOT EXISTS：眼下没有职务的人（待分配、刚毕业）仍然是候选人。
-    for c in con.execute(
-            "SELECT c.* FROM character c WHERE c.alive=1 AND c.retired=0 "
-            "AND NOT EXISTS (SELECT 1 FROM office_holding h "
-            "  JOIN position_slot ps ON ps.id = h.position_slot_id "
-            "  JOIN organization o ON o.id = ps.organization_id "
-            "  WHERE h.character_id = c.id AND h.end_date IS NULL "
-            "    AND o.simulated = 0) "
-            "ORDER BY c.id"):
+    #
+    # 但中央的岗位例外：部长本来就多是从各省省委书记、省长里出的，
+    # 把外省的人排除掉，一百多个正部级位子就没人可选了。
+    # 任用范围的大小，本来就是这个岗位由谁管的直接结果。
+    nationwide = _org_admin_level(con, ctx.slot["id"]) == "CENTRAL"
+    sql = "SELECT c.* FROM character c WHERE c.alive=1 AND c.retired=0 "
+    if not nationwide:
+        sql += ("AND NOT EXISTS (SELECT 1 FROM office_holding h "
+                "  JOIN position_slot ps ON ps.id = h.position_slot_id "
+                "  JOIN organization o ON o.id = ps.organization_id "
+                "  WHERE h.character_id = c.id AND h.end_date IS NULL "
+                "    AND o.simulated = 0) ")
+    for c in con.execute(sql + "ORDER BY c.id"):
         if all(x["ok"] for x in check_conditions(c, ctx)):
             cur = LEVEL_ORDER.get(ctx.levels.get(c["id"], "科员"), 1)
             out.append((cur if ctx.target is not None else None, c))

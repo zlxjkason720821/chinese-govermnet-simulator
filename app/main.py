@@ -202,6 +202,7 @@ class Main(QMainWindow):
         self._build_projects()
         self._build_meetings()
         self._build_central()
+        self._build_bodies()
         self._build_regions()
         self._build_org()
         self._build_timeline()
@@ -886,7 +887,35 @@ class Main(QMainWindow):
         self.central_grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         scroll.setWidget(self.central_box)
         lay.addWidget(scroll, 1)
+
+        # 到中央去：行政级别和党内身份是两个轴（蓝图二十三）。
+        # 玩家问"省委书记之后是什么"，答案必须看得见，不能埋在代码里。
+        box = QFrame(); box.setObjectName("ccard")
+        box.setStyleSheet("QFrame#ccard{background:#fdfcf9;border:1px solid %s;"
+                          "border-left:4px solid %s;}"
+                          "QFrame#ccard QLabel{background:transparent;border:none;}"
+                          % (LINE, ACCENT))
+        bl = QVBoxLayout(box); bl.setContentsMargins(14, 10, 14, 10); bl.setSpacing(3)
+        t2 = QLabel("到中央去")
+        t2.setStyleSheet("font-size:13px;font-weight:bold;color:%s;" % ACCENT)
+        bl.addWidget(t2)
+        self.cpath_body = QLabel(); self.cpath_body.setWordWrap(True)
+        self.cpath_body.setStyleSheet("color:%s;font-size:12px;" % MUTED)
+        bl.addWidget(self.cpath_body)
+        lay.addWidget(box)
         self.tabs.addTab(page, "中央")
+
+    def _build_bodies(self):
+        page = QWidget(); lay = QVBoxLayout(page)
+        lay.setContentsMargins(18, 14, 18, 14)
+        t = QLabel("中央机构"); t.setObjectName("sectionTitle")
+        lay.addWidget(t)
+        self.body_hint = QLabel()
+        self.body_hint.setObjectName("hint"); self.body_hint.setWordWrap(True)
+        lay.addWidget(self.body_hint)
+        self.body_table = make_table(["机构", "全称", "系统", "主要负责人", "设立"])
+        lay.addWidget(self.body_table)
+        self.tabs.addTab(page, "中央机构")
 
     def _central_card(self, r, year):
         card = QFrame(); card.setObjectName("ccard")
@@ -1073,6 +1102,28 @@ class Main(QMainWindow):
             "你的党内身份：%s" % (mine or "无（中央委员只在党代会上产生）"))
         for i, r in enumerate(roster):
             self.central_grid.addWidget(self._central_card(r, year), i // 4, i % 4)
+
+        cp = g.central_path()
+        NL2 = chr(10)
+        self.cpath_body.setText(NL2.join(
+            [cp["说明"], "",
+             "　行政级别　" + "　→　".join(
+                 ("【%s】" % r["level"]) if r["当前"] else
+                 (r["level"] if r["到了"] == "是" else "·" + r["level"])
+                 for r in cp["台阶"]),
+             "　你现在：%s　党内身份：%s" % (cp["现在"], cp["党内身份"] or "无"), ""]
+            + ["　%s　%s" % (x["status"], x["need"]) for x in cp["身份"]]
+            + ["", cp["提醒"].replace(NL2, "").replace("  ", "")]))
+
+        bodies = g.central_bodies()
+        self.body_hint.setText(
+            "中央和国务院共 %d 个机构。带年代：1986 年是国家教育委员会、"
+            "对外经济贸易部、冶金工业部那一套；1998 年那次机构改革一次撤掉十几个部，"
+            "一代人的正部级岗位就此消失。这些机构的正职默认进中央委员会。" % len(bodies))
+        fill(self.body_table,
+             [(b["name"], b["full"], b["sys"] or "—",
+               "%s %s" % (b["post"] or "", b["head"] or ""), str(b["since"])[:10])
+              for b in bodies])
 
         rl = g.region_listing()
         self.region_hint.setText(

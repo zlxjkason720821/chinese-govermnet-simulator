@@ -463,6 +463,9 @@ def tick(con, on, rng, rules):
     # 到新单位去，他会被放到地方上当主政官员。（蓝图十二）
     if on.day == 1 and secretary.settle(con, on):
         changed = True
+    if on.day == 1:
+        # 中央委员出缺，候补委员依次递补（党章第二十二条）
+        central.fill_vacancies(con, on)
     _keep_supplied(con, on, rng)
     if (on.month, on.day) == (12, 31):         # 年度考核
         actions.annual_assessment(con, on, rng, rules)

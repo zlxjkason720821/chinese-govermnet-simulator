@@ -676,6 +676,31 @@ class Game:
         """§58 任务窗口：待办事项。"""
         return tasks.pending(self.con, self.player_id, self.clock.date)
 
+    def central_path(self):
+        """到中央去的两条轴：行政级别和党内身份。
+
+        蓝图二十三：这两条不是一回事。摆在明面上，不做隐藏机制。
+        """
+        from gongpu import tracks as _tk
+        from gongpu.appointment import LEVEL_ORDER as _LEVEL
+        cfg = _tk.cfg().get("central_path", {})
+        cur = actions.player_level(self.con, self.player_id)
+        lvl = next((k for k, v in _LEVEL.items() if v == cur), "科员")
+        mine = central.current_status(self.con, self.player_id)
+        rungs = []
+        for r in cfg.get("rungs", []):
+            n = _LEVEL.get(r["level"], 99)
+            rungs.append(dict(r, 到了="是" if cur >= n else "未到",
+                              当前=(r["level"] == lvl)))
+        return {"现在": lvl, "党内身份": mine, "台阶": rungs,
+                "身份": cfg.get("identity", []), "说明": cfg.get("note", ""),
+                "提醒": cfg.get("caution", "")}
+
+    def central_bodies(self):
+        """中央机构总览。带年代：1986 年是国家教委，不是教育部。"""
+        from gongpu import ministries
+        return ministries.listing(self.con, self.clock.date)
+
     def secretary_rules(self):
         """秘书这条路的规矩。摆在明面上，不做隐藏机制。"""
         from gongpu import tracks as _tk
@@ -731,6 +756,17 @@ class Game:
                                  (actors[0],))[0] if actors else "有关同志"
                 out.append((on, self.text.render(kind, on, org=self.org_name(),
                                                  post=data.get("title", ""), name=name)))
+            elif r["event_type"] == "institution_abolished":
+                mine = self.player_id in actors
+                out.append((on, "%s，%s撤销。%s%s" % (
+                    date_cn(on), data.get("name", ""), data.get("note", ""),
+                    "　你所在的单位没有了，等组织上另行安排。" if mine else "")))
+            elif r["event_type"] == "institution_established":
+                out.append((on, "%s，%s设立。%s" % (
+                    date_cn(on), data.get("name", ""), data.get("note", ""))))
+            elif r["event_type"] == "central_alternate_promoted"                     and self.player_id in actors:
+                out.append((on, "%s，中央委员出缺，你由候补委员递补为中央委员。"
+                            % date_cn(on)))
             elif r["event_type"] == "secretary_settled" and self.player_id in actors:
                 out.append((on, "%s，组织上找你谈话。%s%s" % (
                     date_cn(on), data.get("why", ""),
