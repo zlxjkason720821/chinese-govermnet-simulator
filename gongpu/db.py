@@ -50,6 +50,15 @@ CREATE TABLE organization (
     -- 外省的班子存在、有人、会换届，但空缺直接由上级调人补，
     -- 不跑候选池——三百个外省岗位跑完整状态机，四十年要多花一分钟。
     simulated     INTEGER NOT NULL DEFAULT 1,
+    -- 机关类型。不是"党委/政府"这种大类，是"组织部/公安/法院/税务"
+    -- 这种具体形态——因为这些机关连"副职怎么叫、谁是二把手、
+    -- 谁能高配、谁经常兼任"都不一样，不能套同一张模板。
+    archetype     TEXT,
+    -- 干部管理方式：LOCAL 属地管理 / VERTICAL 垂直管理（税务、海关、国安）
+    personnel_control TEXT NOT NULL DEFAULT 'LOCAL',
+    -- 机构和班子的公开程度。国安系统公开信息本来就少，
+    -- 为了"细"去虚构几十个处室，比留白更不真实。
+    visibility    TEXT NOT NULL DEFAULT 'PUBLIC',
     protocol_order INTEGER,                  -- 四套班子次序：党委1 人大2 政府3 政协4
     organization_type TEXT,
     system_type   TEXT,

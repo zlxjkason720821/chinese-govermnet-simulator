@@ -28,7 +28,53 @@
 公安局长兼副县长、县委常委兼组织部长，这种地方才需要有人管日常。
 普通的民政局、统计局没有，党组副书记也不自动等于常务副局长。
 """
+from datetime import date
+
+import yaml
+
+from gongpu import paths
 from gongpu.appointment import LEVEL_ORDER
+
+_TPL = {}
+
+
+def templates():
+    """专属领导班子模板。按机关类型分开——组织部、公安、法院、税务
+    连"副职怎么叫、谁是二把手"都不一样，不能套同一张模板。"""
+    if not _TPL:
+        _TPL.update(yaml.safe_load(
+            (paths.DATA / "leadership_templates.yaml").read_text(encoding="utf-8")))
+    return _TPL
+
+
+def template_for(archetype):
+    return templates()["archetypes"].get(archetype or "", {})
+
+
+def daily_work_title(archetype, post):
+    """分管日常工作的副职在这个机关怎么称呼。"""
+    t = template_for(archetype)
+    pat = t.get("daily_work_title") or templates()["defaults"]["daily_work_title"]
+    return pat.format(post=post)
+
+
+def operational_no2(con, org_id):
+    """实际承担机关日常工作的主要副职。
+
+    它和班子排序的第二位、党组副书记、法定代行职务的人，
+    经常不是同一个：这四个"第二"必须分开。
+    """
+    r = con.execute(
+        "SELECT h.character_id AS cid, h.party_post AS pp, d.name AS post, "
+        " s.leadership_order AS lo, s.executive_deputy AS ed "
+        "FROM office_holding h "
+        "JOIN position_slot s ON s.id = h.position_slot_id "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "WHERE h.end_date IS NULL AND s.organization_id=? AND d.is_leadership=1 "
+        "AND COALESCE(s.leadership_order, 99) > 1 "      # 先把正职排除掉
+        "ORDER BY s.executive_deputy DESC, s.leadership_order LIMIT 1",
+        (org_id,)).fetchone()
+    return dict(r) if r else None
 
 # 分管日常工作的副职，各机关的叫法不一样。
 # 党委部门和办公厅多用"常务副X"或"分管日常工作的副X"，
@@ -48,9 +94,22 @@ PARTY_POSTS = ["党组副书记", "党组成员", "党组成员", None]
 SECONDMENT_YEARS = 2
 
 
-def executive_title(post, system):
-    """分管日常工作的副职在这个系统里怎么称呼。"""
+def executive_title(post, system, archetype=None):
+    """分管日常工作的副职怎么称呼。先按机关模板，再按系统。"""
+    if archetype:
+        t = template_for(archetype)
+        if t.get("daily_work_title"):
+            return t["daily_work_title"].format(post=post)
     return EXECUTIVE_NAME.get(system, DEFAULT_EXECUTIVE).format(post=post)
+
+
+def wants_daily_work_deputy(archetype):
+    """这类机关默认设不设分管日常工作的副职。
+
+    模板里写了 operational_no2 的才设。发改、财政、卫健、审计、
+    国资这些明确写成 null——它们不该人人都有常务副职。
+    """
+    return bool(template_for(archetype).get("operational_no2"))
 
 
 def head_is_concurrent(con, org_id):
@@ -103,8 +162,8 @@ def install(con, on):
     """
     changed = []
     for org in con.execute(
-            "SELECT id, COALESCE(short_name,name) AS n, system_type AS sys "
-            "FROM organization WHERE active=1 AND simulated=1 "
+            "SELECT id, COALESCE(short_name,name) AS n, system_type AS sys, "
+            " archetype AS arch FROM organization WHERE active=1 AND simulated=1 "
             "AND parent_id IS NOT NULL ORDER BY id").fetchall():
         deputies = con.execute(
             "SELECT s.id, d.name AS post, d.protocol_order AS po "
@@ -118,6 +177,10 @@ def install(con, on):
             con.execute("UPDATE position_slot SET leadership_order=? WHERE id=?",
                         (i + 1, r["id"]))
         yes, why = needs_executive_deputy(con, org["id"])
+        # 两个条件都要：这类机关本来就设（模板说了算），
+        # 而且这一任正职确实是兼任（条例说了算）。
+        if yes and not wants_daily_work_deputy(org["arch"]):
+            yes = False
         if not yes:
             con.execute("UPDATE position_slot SET executive_deputy=0 "
                         "WHERE organization_id=?", (org["id"],))
@@ -127,7 +190,7 @@ def install(con, on):
         con.execute("UPDATE position_slot SET executive_deputy=1 WHERE id=?",
                     (second["id"],))
         changed.append((org["n"], executive_title(second["post"].lstrip("副"),
-                                                  org["sys"]), why))
+                                                  org["sys"], org["arch"]), why))
     return changed
 
 
@@ -139,13 +202,14 @@ def assign_party_posts(con):
     其中一位协助主任抓全面，另一位另有分工。
     """
     n = 0
-    # 只有政府工作部门设党组。
+    # 政府工作部门、法院、检察院设党组。
     # 党的工作机关（组织部、宣传部、政法委、办公厅）本身就是党的机构，
     # 不设党组；四套班子自己更不套——"县委党委书记"是句病句。
     for org in con.execute(
             "SELECT id, organization_type AS t FROM organization "
             "WHERE active=1 AND simulated=1 AND parent_id IS NOT NULL "
-            "AND organization_type='GOVERNMENT' AND protocol_order IS NULL").fetchall():
+            "AND organization_type IN ('GOVERNMENT','COURT','PROCURATORATE') "
+            "AND protocol_order IS NULL").fetchall():
         kind = "党组"
         rows = con.execute(
             "SELECT h.id, s.leadership_order AS lo FROM office_holding h "
@@ -182,7 +246,8 @@ def full_title(con, holding_id):
         "SELECT h.character_id AS cid, h.party_post AS pp, h.acting_head AS ah, "
         " h.appointment_type AS at, h.personal_rank AS pr, d.name AS post, "
         " d.leadership_level AS lvl, s.executive_deputy AS ed, "
-        " COALESCE(o.short_name,o.name) AS org, o.system_type AS sys "
+        " COALESCE(o.short_name,o.name) AS org, o.system_type AS sys, "
+        " o.archetype AS arch "
         "FROM office_holding h "
         "JOIN position_slot s ON s.id = h.position_slot_id "
         "JOIN position_definition d ON d.id = s.position_definition_id "
@@ -192,7 +257,7 @@ def full_title(con, holding_id):
         return None
     post = r["post"]
     if r["ed"] and post.startswith("副"):
-        post = executive_title(post[1:], r["sys"])
+        post = executive_title(post[1:], r["sys"], r["arch"])
     # 党内职务在前，行政职务在后：党组副书记、常务副局长
     parts = [r["org"] + (r["pp"] or "")] if r["pp"] else []
     parts.append(post if parts else r["org"] + post)
@@ -225,10 +290,12 @@ def acting_heads(con, on):
     所以这里不改他的职务，只加一个标记。
     """
     out = []
-    for org in con.execute(
-            "SELECT DISTINCT s.organization_id AS org FROM position_slot s "
-            "JOIN position_definition d ON d.id = s.position_definition_id "
-            "WHERE s.status='VACANT' AND d.is_leadership=1 AND s.leadership_order=1"):
+    vacancies = con.execute(
+        "SELECT DISTINCT s.organization_id AS org FROM position_slot s "
+        "WHERE s.status='VACANT' AND s.leadership_order=1").fetchall()
+    if not vacancies:
+        return out
+    for org in vacancies:
         r = con.execute(
             "SELECT h.id, h.character_id FROM office_holding h "
             "JOIN position_slot s ON s.id = h.position_slot_id "

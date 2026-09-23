@@ -23,41 +23,57 @@ organizations:
   # 省级
   - {key: shengwei,  name: 中国共产党河北省委员会, short: 中共河北省委, type: PARTY,      grade: 正部级, level: PROVINCIAL, protocol: 1, parent: zhongyang, system: 党委}
   - {key: shengzf,   name: 河北省人民政府,       short: 河北省人民政府, type: GOVERNMENT, grade: 正部级, level: PROVINCIAL, protocol: 3, parent: guowuyuan, system: 政务}
-  - {key: sheng_zzb, name: 中共河北省委组织部,   short: 省委组织部, type: PARTY, grade: 副部级, level: PROVINCIAL, parent: shengwei, system: 组织}
-  - {key: sheng_bgt, name: 中共河北省委办公厅,   short: 省委办公厅, type: PARTY, grade: 副部级, level: PROVINCIAL, parent: shengwei, system: 综合}
-  - {key: shengzf_bgt, name: 河北省人民政府办公厅, short: 省政府办公厅, type: GOVERNMENT, grade: 副部级, level: PROVINCIAL, parent: shengzf, system: 综合}
+  - {key: sheng_zzb, name: 中共河北省委组织部,   short: 省委组织部, type: PARTY, grade: 副部级, level: PROVINCIAL, parent: shengwei, system: 组织, archetype: ORGANIZATION_DEPT}
+  - {key: sheng_bgt, name: 中共河北省委办公厅,   short: 省委办公厅, type: PARTY, grade: 副部级, level: PROVINCIAL, parent: shengwei, system: 综合, archetype: PARTY_OFFICE}
+  - {key: shengzf_bgt, name: 河北省人民政府办公厅, short: 省政府办公厅, type: GOVERNMENT, grade: 副部级, level: PROVINCIAL, parent: shengzf, system: 综合, archetype: GOV_OFFICE}
 
   # 市级（红山县的上级）。有了这一层，县委书记才有地方可去，
   # 党校的厅级轮训范围也才落得下来。
   - {key: shiwei,   name: 中国共产党平州市委员会, short: 中共平州市委, type: PARTY,      grade: 正厅级, level: MUNICIPAL, protocol: 1, parent: shengwei, system: 党委}
   - {key: shizf,    name: 平州市人民政府,       short: 平州市人民政府, type: GOVERNMENT, grade: 正厅级, level: MUNICIPAL, protocol: 3, parent: shengzf, system: 政务}
-  - {key: shi_bgt,  name: 中共平州市委办公厅,   short: 市委办公厅, type: PARTY,      grade: 正处级, level: MUNICIPAL, parent: shiwei, system: 综合}
-  - {key: shizf_bgt, name: 平州市人民政府办公厅, short: 市政府办公厅, type: GOVERNMENT, grade: 正处级, level: MUNICIPAL, parent: shizf, system: 综合}
-  - {key: shi_zzb,  name: 中共平州市委组织部,   short: 市委组织部, type: PARTY,      grade: 正处级, level: MUNICIPAL, parent: shiwei, system: 组织}
-  - {key: shi_czj,  name: 平州市财政局,         short: 市财政局,   type: GOVERNMENT, grade: 正处级, level: MUNICIPAL, parent: shizf, system: 财经}
+  - {key: shi_bgt,  name: 中共平州市委办公厅,   short: 市委办公厅, type: PARTY,      grade: 正处级, level: MUNICIPAL, parent: shiwei, system: 综合, archetype: PARTY_OFFICE}
+  - {key: shizf_bgt, name: 平州市人民政府办公厅, short: 市政府办公厅, type: GOVERNMENT, grade: 正处级, level: MUNICIPAL, parent: shizf, system: 综合, archetype: GOV_OFFICE}
+  - {key: shi_zzb,  name: 中共平州市委组织部,   short: 市委组织部, type: PARTY,      grade: 正处级, level: MUNICIPAL, parent: shiwei, system: 组织, archetype: ORGANIZATION_DEPT}
+  - {key: shi_czj,  name: 平州市财政局,         short: 市财政局,   type: GOVERNMENT, grade: 正处级, level: MUNICIPAL, parent: shizf, system: 财经, archetype: FINANCE}
 
   # 四套班子（县级）
   - {key: xianwei,  name: 中国共产党红山县委员会, short: 中共红山县委, type: PARTY,      grade: 正处级, protocol: 1, parent: shiwei, system: 党委}
   - {key: renda,    name: 红山县人民代表大会常务委员会, short: 红山县人大常委会, type: PEOPLES_CONGRESS, grade: 正处级, protocol: 2, system: 人大}
   - {key: xianzf,   name: 红山县人民政府,       short: 红山县人民政府, type: GOVERNMENT, grade: 正处级, protocol: 3, parent: shizf, system: 政务}
   - {key: zhengxie, name: 中国人民政治协商会议红山县委员会, short: 红山县政协, type: CPPCC, grade: 正处级, protocol: 4, system: 政协}
-  - {key: jiwei,    name: 中共红山县纪律检查委员会, short: 中共红山县纪委, type: PARTY, grade: 副处级, protocol: 5, parent: xianwei, system: 纪检}
+  - {key: jiwei,    name: 中共红山县纪律检查委员会, short: 中共红山县纪委, type: PARTY, grade: 副处级, protocol: 5, parent: xianwei, system: 纪检, archetype: DISCIPLINE_SUPERVISION}
 
   # 县委工作部门
-  - {key: xw_bgs,   name: 中共红山县委办公室,   short: 县委办,     type: PARTY, grade: 正科级, parent: xianwei, system: 综合}
-  - {key: zzb,      name: 中共红山县委组织部,   short: 县委组织部, type: PARTY, grade: 正科级, parent: xianwei, system: 组织}
-  - {key: xcb,      name: 中共红山县委宣传部,   short: 县委宣传部, type: PARTY, grade: 正科级, parent: xianwei, system: 宣传}
-  - {key: tzb,      name: 中共红山县委统战部,   short: 县委统战部, type: PARTY, grade: 正科级, parent: xianwei, system: 宣传}
-  - {key: zfw,      name: 中共红山县委政法委员会, short: 县委政法委, type: PARTY, grade: 正科级, parent: xianwei, system: 政法}
+  - {key: xw_bgs,   name: 中共红山县委办公室,   short: 县委办,     type: PARTY, grade: 正科级, parent: xianwei, system: 综合, archetype: PARTY_OFFICE}
+  - {key: zzb,      name: 中共红山县委组织部,   short: 县委组织部, type: PARTY, grade: 正科级, parent: xianwei, system: 组织, archetype: ORGANIZATION_DEPT}
+  - {key: xcb,      name: 中共红山县委宣传部,   short: 县委宣传部, type: PARTY, grade: 正科级, parent: xianwei, system: 宣传, archetype: PROPAGANDA_DEPT}
+  - {key: tzb,      name: 中共红山县委统战部,   short: 县委统战部, type: PARTY, grade: 正科级, parent: xianwei, system: 宣传, archetype: UNITED_FRONT_DEPT}
+  - {key: zfw,      name: 中共红山县委政法委员会, short: 县委政法委, type: PARTY, grade: 正科级, parent: xianwei, system: 政法, archetype: POLITICAL_LEGAL_COMMITTEE}
 
   # 政府工作部门
-  - {key: zf_bgs,   name: 红山县人民政府办公室, short: 县政府办, type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 综合}
-  - {key: czj,      name: 红山县财政局,         short: 财政局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 财经}
-  - {key: mzj,      name: 红山县民政局,         short: 民政局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务}
-  - {key: nyj,      name: 红山县农业局,         short: 农业局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务}
-  - {key: jyj,      name: 红山县教育局,         short: 教育局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务}
-  - {key: gaj,      name: 红山县公安局,         short: 公安局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 政法}
-  - {key: sjj,      name: 红山县审计局,         short: 审计局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 财经}
+  - {key: zf_bgs,   name: 红山县人民政府办公室, short: 县政府办, type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 综合, archetype: GOV_OFFICE}
+  - {key: czj,      name: 红山县财政局,         short: 财政局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 财经, archetype: FINANCE}
+  - {key: mzj,      name: 红山县民政局,         short: 民政局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务, archetype: GENERIC_DEPARTMENT}
+  - {key: nyj,      name: 红山县农业局,         short: 农业局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务, archetype: GENERIC_DEPARTMENT}
+  - {key: jyj,      name: 红山县教育局,         short: 教育局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务, archetype: EDUCATION}
+  - {key: gaj,      name: 红山县公安局,         short: 公安局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 政法, archetype: PUBLIC_SECURITY}
+  - {key: sjj,      name: 红山县审计局,         short: 审计局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 财经, archetype: AUDIT}
+  - {key: jhw,      name: 红山县计划委员会,     short: 县计委,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 财经, archetype: DEVELOPMENT_REFORM}
+  - {key: wsj,      name: 红山县卫生局,         short: 卫生局,   type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 业务, archetype: HEALTH}
+
+  #  审判、检察机关不是政府工作部门。它们的产生和任免走人大程序，
+  #  班子称谓也不一样（院长、副院长、审判委员会委员；检察长、副检察长）。
+  - {key: fayuan,   name: 红山县人民法院,       short: 县法院,   type: COURT, grade: 正科级, parent: xianwei, system: 政法, archetype: COURT}
+  - {key: jiancha,  name: 红山县人民检察院,     short: 县检察院, type: PROCURATORATE, grade: 正科级, parent: xianwei, system: 政法, archetype: PROCURATORATE}
+
+  #  税务是垂直管理系统：干部不由本地党委管，这是它和民政局最根本的区别。
+  - {key: swj,      name: 红山县税务局,         short: 县税务局, type: GOVERNMENT, grade: 正科级, parent: xianzf, system: 财经, archetype: TAXATION, control: VERTICAL}
+
+  #  国家安全机关。公开信息本来就少，为了"细"去虚构处室，比留白更不真实。
+  - {key: shi_gaj,  name: 平州市公安局,         short: 市公安局, type: GOVERNMENT, grade: 正处级, level: MUNICIPAL, parent: shizf, system: 政法, archetype: PUBLIC_SECURITY}
+  - {key: shi_gaqj, name: 平州市国家安全局,     short: 市国安局, type: GOVERNMENT, grade: 正处级, level: MUNICIPAL, parent: shizf, system: 政法, archetype: STATE_SECURITY, control: VERTICAL, visibility: RESTRICTED}
+  - {key: shi_fy,   name: 平州市中级人民法院,   short: 市中院,   type: COURT, grade: 正处级, level: MUNICIPAL, parent: shiwei, system: 政法, archetype: COURT}
+  - {key: shi_jc,   name: 平州市人民检察院,     short: 市检察院, type: PROCURATORATE, grade: 正处级, level: MUNICIPAL, parent: shiwei, system: 政法, archetype: PROCURATORATE}
 
   # 乡镇
   - {key: qingyang, name: 中共青阳镇委员会,     short: 青阳镇,   type: TOWNSHIP, grade: 正科级, parent: xianwei, system: 乡镇}
@@ -186,6 +202,18 @@ position_definitions:
   - {key: zfwsj,  name: 书记,       lead: 1, auth: COUNTY, min_age: 30, max_age: 56, party: 1, exp: 6, level: 正科级, protocol: 10}
   - {key: zfwfsj, name: 副书记,     lead: 1, auth: COUNTY, min_age: 27, max_age: 55, party: 1, exp: 4, level: 副科级, protocol: 11}
   - {key: juzh,   name: 局长,       lead: 1, auth: COUNTY, min_age: 28, max_age: 57, party: 1, exp: 4, level: 正科级, protocol: 10}
+  #  审判、检察机关的职务名称自成一套，不能叫"法院局长"。
+  - {key: yuanzh,  name: 院长,       lead: 1, auth: COUNTY, min_age: 32, max_age: 58, party: 1, exp: 8, level: 正科级, protocol: 10}
+  - {key: fyuanzh, name: 副院长,     lead: 1, auth: COUNTY, min_age: 28, max_age: 56, party: 0, exp: 5, level: 副科级, protocol: 11}
+  - {key: spwzw,   name: 审判委员会专职委员, lead: 1, auth: COUNTY, min_age: 30, max_age: 57, party: 0, exp: 6, level: 副科级, protocol: 13}
+  - {key: jianchazh,  name: 检察长,   lead: 1, auth: COUNTY, min_age: 32, max_age: 58, party: 1, exp: 8, level: 正科级, protocol: 10}
+  - {key: fjianchazh, name: 副检察长, lead: 1, auth: COUNTY, min_age: 28, max_age: 56, party: 0, exp: 5, level: 副科级, protocol: 11}
+  - {key: jcwzw,   name: 检察委员会专职委员, lead: 1, auth: COUNTY, min_age: 30, max_age: 57, party: 0, exp: 6, level: 副科级, protocol: 13}
+  #  专业班子成员：公安有政治部主任，财税审计有总会计师、总审计师。
+  - {key: zzbzr,   name: 政治部主任, lead: 1, auth: COUNTY, min_age: 30, max_age: 57, party: 1, exp: 6, level: 副科级, protocol: 12}
+  - {key: zkjs,    name: 总会计师,   lead: 1, auth: COUNTY, min_age: 32, max_age: 58, party: 0, exp: 8, level: 副科级, protocol: 14}
+  - {key: zsjs,    name: 总审计师,   lead: 1, auth: COUNTY, min_age: 32, max_age: 58, party: 0, exp: 8, level: 副科级, protocol: 14}
+  - {key: zdx,     name: 总督学,     lead: 1, auth: COUNTY, min_age: 32, max_age: 58, party: 0, exp: 8, level: 副科级, protocol: 14}
   - {key: fjuzh,  name: 副局长,     lead: 1, auth: COUNTY, min_age: 25, max_age: 55, party: 0, exp: 2, level: 副科级, protocol: 11}
   - {key: zhuren, name: 主任,       lead: 1, auth: COUNTY, min_age: 28, max_age: 57, party: 1, exp: 4, level: 正科级, protocol: 10}
   - {key: fzhuren, name: 副主任,    lead: 1, auth: COUNTY, min_age: 25, max_age: 55, party: 0, exp: 2, level: 副科级, protocol: 11}
@@ -311,8 +339,35 @@ slots:
   - {org: jyj,      pos: fjuzh,    n: 2}
   - {org: jyj,      pos: keyuan,   n: 5}
   - {org: gaj,      pos: juzh,     n: 1}
-  - {org: gaj,      pos: fjuzh,    n: 2}
+  - {org: gaj,      pos: fjuzh,    n: 3}
+  - {org: gaj,      pos: zzbzr,    n: 1}
   - {org: gaj,      pos: keyuan,   n: 6}
+  - {org: jhw,      pos: zhuren,   n: 1}
+  - {org: jhw,      pos: fzhuren,  n: 2}
+  - {org: jhw,      pos: keyuan,   n: 4}
+  - {org: wsj,      pos: juzh,     n: 1}
+  - {org: wsj,      pos: fjuzh,    n: 2}
+  - {org: wsj,      pos: keyuan,   n: 4}
+  - {org: swj,      pos: juzh,     n: 1}
+  - {org: swj,      pos: fjuzh,    n: 2}
+  - {org: swj,      pos: keyuan,   n: 5}
+  - {org: fayuan,   pos: yuanzh,   n: 1}
+  - {org: fayuan,   pos: fyuanzh,  n: 2}
+  - {org: fayuan,   pos: spwzw,    n: 1}
+  - {org: fayuan,   pos: keyuan,   n: 6}
+  - {org: jiancha,  pos: jianchazh,  n: 1}
+  - {org: jiancha,  pos: fjianchazh, n: 2}
+  - {org: jiancha,  pos: jcwzw,      n: 1}
+  - {org: jiancha,  pos: keyuan,     n: 5}
+  - {org: shi_gaj,  pos: shijuzh,  n: 1}
+  - {org: shi_gaj,  pos: chuzhang, n: 2}
+  - {org: shi_gaj,  pos: shikeyuan, n: 4}
+  - {org: shi_gaqj, pos: shijuzh,  n: 1}
+  - {org: shi_gaqj, pos: shikeyuan, n: 3}
+  - {org: shi_fy,   pos: shijuzh,  n: 1}
+  - {org: shi_fy,   pos: shikeyuan, n: 4}
+  - {org: shi_jc,   pos: shijuzh,  n: 1}
+  - {org: shi_jc,   pos: shikeyuan, n: 4}
   - {org: sjj,      pos: juzh,     n: 1}
   - {org: sjj,      pos: fjuzh,    n: 1}
   - {org: sjj,      pos: keyuan,   n: 4}
@@ -349,6 +404,7 @@ concurrent:
   - {holder: {org: xianwei, pos: changwei}, also: {org: zfw,    pos: zfwsj}}
   - {holder: {org: xianwei, pos: changwei}, also: {org: xw_bgs, pos: zhuren}}
   - {holder: {org: xianzf,  pos: fxz},      also: {org: gaj,    pos: juzh}}
+  - {holder: {org: shizf,   pos: fshizhang}, also: {org: shi_gaj, pos: shijuzh}}
   - {holder: {org: shiwei,  pos: swcw},     also: {org: shi_zzb, pos: shibuzh}}
   - {holder: {org: shiwei,  pos: swcw},     also: {org: shi_bgt, pos: mishuzhang}}
   - {holder: {org: shengwei, pos: sw_cw},   also: {org: sheng_zzb, pos: sheng_bzh}}

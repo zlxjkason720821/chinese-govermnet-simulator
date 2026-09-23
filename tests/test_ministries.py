@@ -161,7 +161,17 @@ def test_选出来的人数对得上名额():
     只数"中央委员"那一档会少二十几个人。"""
     con, rng, clock, _ = new_game(seed="名额")
     advance_to(con, clock, date(1988, 12, 31), rng)
-    assert central.committee_size(con) == central.quota(13)[central.MEMBER]
+    # 查换届当天选出来的人数。之后会有出缺：中央委员出缺由候补委员递补，
+    # 政治局出缺则不递补，所以过一段时间总人数会略少于名额。
+    elected = con.execute(
+        "SELECT count(*) FROM party_central_status WHERE congress=13 "
+        "AND start_date='1987-10-20' AND status IN (?,?,?,?)",
+        (central.MEMBER, central.POLITBURO, central.STANDING,
+         central.GENERAL_SECRETARY)).fetchone()[0]
+    assert elected == central.quota(13)[central.MEMBER]
+    # 眼下在册的不会比名额多，也不该掉太多
+    now = central.committee_size(con)
+    assert elected - 10 <= now <= elected
 
 
 def test_退休不终止中央委员身份():

@@ -480,9 +480,12 @@ def tick(con, on, rng, rules):
         central.fill_vacancies(con, on)
         # 正职空缺时由排第一的副职主持工作。这和"分管日常工作"不是一回事：
         # 分管日常工作的时候正职还在，主持工作是正职的位子空着。
-        leadership.install(con, on)
+        # 主持工作每月看一次（位子空了就得有人顶）；
+        # 班子排序和党内职务一年重排一次就够——每月扫全部机构太贵。
         leadership.acting_heads(con, on)
-        leadership.assign_party_posts(con)
+        if on.month == 1:
+            leadership.install(con, on)
+            leadership.assign_party_posts(con)
     _keep_supplied(con, on, rng)
     if (on.month, on.day) == (12, 31):         # 年度考核
         actions.annual_assessment(con, on, rng, rules)

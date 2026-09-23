@@ -67,15 +67,89 @@ def test_党组副书记不等于常务副职(world):
 
 def test_党的工作机关不设党组(world):
     """组织部、宣传部、政法委本身就是党的机构。
-    "县委组织部党委书记"是句病句。"""
+    "县委组织部党委书记"是句病句。法院检察院则是设党组的。"""
     con = world
     bad = con.execute(
         "SELECT count(*) FROM office_holding h "
         "JOIN position_slot s ON s.id = h.position_slot_id "
         "JOIN organization o ON o.id = s.organization_id "
         "WHERE h.end_date IS NULL AND h.party_post IS NOT NULL "
-        "AND o.organization_type != 'GOVERNMENT'").fetchone()[0]
+        "AND o.organization_type NOT IN "
+        "  ('GOVERNMENT','COURT','PROCURATORATE')").fetchone()[0]
     assert bad == 0
+
+
+def test_每类机关的班子结构不一样(world):
+    """点开不同单位，应该真的出现不同的政治组织结构，
+    而不是"局长 + 副局长×N"换个名字。"""
+    con = world
+    shapes = {}
+    for name in ("公安局", "县法院", "县检察院", "民政局", "县委政法委",
+                 "县委组织部", "市国安局"):
+        r = con.execute("SELECT id FROM organization WHERE short_name=?",
+                        (name,)).fetchone()
+        posts = [x[0] for x in con.execute(
+            "SELECT d.name FROM position_slot s "
+            "JOIN position_definition d ON d.id = s.position_definition_id "
+            "WHERE s.organization_id=? AND d.is_leadership=1 "
+            "ORDER BY s.leadership_order", (r["id"],))]
+        shapes[name] = tuple(posts)
+    assert shapes["县法院"][0] == "院长"
+    assert shapes["县检察院"][0] == "检察长"
+    assert "审判委员会专职委员" in shapes["县法院"]
+    assert "检察委员会专职委员" in shapes["县检察院"]
+    assert "政治部主任" in shapes["公安局"]
+    assert shapes["县委政法委"][0] == "书记"
+    # 七个机关不该有两个结构完全一样
+    assert len(set(shapes.values())) >= 6, shapes
+
+
+def test_垂直管理系统单独标出来(world):
+    """税务、国安的干部不由本地党委管。这是它和民政局最根本的区别。"""
+    con = world
+    vertical = {r[0] for r in con.execute(
+        "SELECT COALESCE(short_name,name) FROM organization "
+        "WHERE personnel_control='VERTICAL'")}
+    assert "县税务局" in vertical
+    assert "市国安局" in vertical
+    assert "民政局" not in vertical
+
+
+def test_国安机关不虚构班子(world):
+    """公开信息本来就少。为了"细"去虚构处室，比留白更不真实。"""
+    con = world
+    r = con.execute("SELECT id, visibility FROM organization "
+                    "WHERE short_name='市国安局'").fetchone()
+    assert r["visibility"] == "RESTRICTED"
+    n = con.execute(
+        "SELECT count(*) FROM position_slot s "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "WHERE s.organization_id=? AND d.is_leadership=1", (r["id"],)).fetchone()[0]
+    assert n <= 2, "国安机关不该铺出一整套公开班子"
+
+
+def test_模板决定这类机关设不设常务副职():
+    """发改、财政、审计、卫健这些，模板里明确不设。"""
+    assert leadership.wants_daily_work_deputy("PUBLIC_SECURITY")
+    assert leadership.wants_daily_work_deputy("ORGANIZATION_DEPT")
+    assert leadership.wants_daily_work_deputy("POLITICAL_LEGAL_COMMITTEE")
+    assert not leadership.wants_daily_work_deputy("FINANCE")
+    assert not leadership.wants_daily_work_deputy("DEVELOPMENT_REFORM")
+    assert not leadership.wants_daily_work_deputy("AUDIT")
+    assert not leadership.wants_daily_work_deputy("GENERIC_DEPARTMENT")
+
+
+def test_四个第二不是同一个人():
+    """operational_no2 / rank_no2 / party_no2 / legal_successor 要分开。"""
+    con, _, _, _ = new_game(seed="四个第二")
+    r = con.execute("SELECT id FROM organization WHERE short_name='公安局'").fetchone()
+    no2 = leadership.operational_no2(con, r["id"])
+    assert no2 and no2["ed"] == 1, "公安局的日常二把手是常务副局长"
+    # 民政局不设常务副职，日常二号位就按班子排序取
+    r2 = con.execute("SELECT id FROM organization WHERE short_name='民政局'").fetchone()
+    n2 = leadership.operational_no2(con, r2["id"])
+    if n2:
+        assert n2["ed"] == 0
 
 
 def test_四套班子自己不套党组(world):

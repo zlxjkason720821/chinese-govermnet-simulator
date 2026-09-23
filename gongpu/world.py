@@ -66,11 +66,14 @@ def bootstrap(con, rng, cfg=None):
     for o in cfg["organizations"]:
         cur = con.execute(
             "INSERT INTO organization(name,short_name,admin_level,protocol_order,"
-            "organization_type,system_type,institution_grade,parent_id,valid_from) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
+            "organization_type,system_type,institution_grade,parent_id,valid_from,"
+            "archetype,personnel_control,visibility) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (o["name"], o.get("short", o["name"]), o.get("level", "COUNTY"),
              o.get("protocol"), o["type"], o.get("system"), o["grade"],
-             org_id.get(o.get("parent")), "1949-10-01"))
+             org_id.get(o.get("parent")), "1949-10-01",
+             o.get("archetype"), o.get("control", "LOCAL"),
+             o.get("visibility", "PUBLIC")))
         org_id[o["key"]] = cur.lastrowid
     for a in cfg["authorities"]:
         con.execute("INSERT INTO cadre_management_authority(level,organization_id) "
