@@ -111,11 +111,11 @@ position_definitions:
   - {key: sheng_fcz,  name: 副处长,   lead: 1, auth: PROVINCIAL, min_age: 30, max_age: 56, party: 0, exp: 7,  level: 副处级, protocol: 11}
   #  省级领导秘书。级别按惯例定：省委书记、省长的秘书是副处级，
   #  领导升迁时下放到县里主政，正好是正处级——县委书记、县长。
-  - {key: sw_sj_ms,   name: 省委书记秘书, lead: 0, auth: PROVINCIAL, min_age: 30, max_age: 50, party: 1, exp: 8, level: 副处级, protocol: 18}
-  - {key: shengz_ms,  name: 省长秘书,     lead: 0, auth: PROVINCIAL, min_age: 30, max_age: 50, party: 1, exp: 8, level: 副处级, protocol: 18}
-  - {key: fshengz_ms, name: 副省长秘书,   lead: 0, auth: PROVINCIAL, min_age: 28, max_age: 50, party: 1, exp: 5, level: 正科级, protocol: 19}
+  - {key: sw_sj_ms,   name: 秘书一处副处长, lead: 0, auth: PROVINCIAL, min_age: 30, max_age: 50, party: 1, exp: 8, level: 副处级, protocol: 18}
+  - {key: shengz_ms,  name: 秘书一处副处长, lead: 0, auth: PROVINCIAL, min_age: 30, max_age: 50, party: 1, exp: 8, level: 副处级, protocol: 18}
+  - {key: fshengz_ms, name: 秘书二处副处长, lead: 0, auth: PROVINCIAL, min_age: 28, max_age: 50, party: 1, exp: 5, level: 正科级, protocol: 19}
   #  中央领导秘书。副厅级，领导升迁时外放正好是正厅级——市委书记、市长。
-  - {key: zy_ms,      name: 中央领导秘书, lead: 0, auth: CENTRAL,    min_age: 35, max_age: 55, party: 1, exp: 15, level: 副厅级, protocol: 18}
+  - {key: zy_ms,      name: 秘书局副局长, lead: 0, auth: CENTRAL,    min_age: 35, max_age: 55, party: 1, exp: 15, level: 副厅级, protocol: 18}
 
   #  市级
   - {key: swsj,   name: 书记,       lead: 1, auth: PROVINCIAL, min_age: 45, max_age: 62, party: 1, exp: 20, level: 正厅级, protocol: 1}
@@ -124,7 +124,13 @@ position_definitions:
   - {key: swcw,   name: 常委,       lead: 1, auth: PROVINCIAL, min_age: 40, max_age: 58, party: 1, exp: 14, level: 副厅级, protocol: 3}
   - {key: fshizhang, name: 副市长,  lead: 1, auth: PROVINCIAL, min_age: 38, max_age: 58, party: 0, exp: 13, level: 副厅级, protocol: 3}
   - {key: shibuzh, name: 部长,      lead: 1, auth: MUNICIPAL,  min_age: 36, max_age: 58, party: 1, exp: 12, level: 正处级, protocol: 10}
+  #  党委秘书长和政府秘书长是两回事。
+  #  政府秘书长是《地方各级人民代表大会和地方各级人民政府组织法》规定的
+  #  政府常务会议法定组成人员：常务会议由市长、副市长和秘书长组成。
+  #  党委秘书长则不因"秘书长"三个字自动成为常委——要看他是不是另有常委身份。
   - {key: mishuzhang, name: 秘书长,  lead: 1, auth: PROVINCIAL, min_age: 40, max_age: 58, party: 1, exp: 16, level: 副厅级, protocol: 4}
+  - {key: zf_mishuzhang, name: 秘书长, lead: 1, auth: PROVINCIAL, min_age: 40, max_age: 58, party: 0, exp: 16, level: 副厅级, protocol: 4}
+  - {key: xzf_mishuzhang, name: 秘书长, lead: 1, auth: MUNICIPAL, min_age: 35, max_age: 57, party: 0, exp: 10, level: 副处级, protocol: 4}
   - {key: fumishuzhang, name: 副秘书长, lead: 1, auth: MUNICIPAL, min_age: 35, max_age: 56, party: 1, exp: 12, level: 正处级, protocol: 5}
   #  办公厅的处室。原来只有一个笼统的"处长"，于是市委办公厅的科员
   #  和县里的科员一样，下一步永远是副局长那老三样。
@@ -139,15 +145,19 @@ position_definitions:
   - {key: zhfuchu,  name: 综合处副处长,   lead: 1, auth: MUNICIPAL, min_age: 27, max_age: 54, party: 0, exp: 3, level: 副科级, protocol: 16}
   - {key: dcfuchu,  name: 督查处副处长,   lead: 1, auth: MUNICIPAL, min_age: 27, max_age: 54, party: 0, exp: 3, level: 副科级, protocol: 17}
   - {key: fuchuzhang, name: 副处长, lead: 1, auth: MUNICIPAL,  min_age: 27, max_age: 54, party: 0, exp: 3,  level: 副科级, protocol: 18}
-  #  领导个人秘书（"大秘"）。蓝图十二点名：必须和办公厅干部区分开。
-  #  这是服务性质的岗位，跟人走，领导动了它就没了——见识和信任是真的，
-  #  但它本身不是台阶。serves 指明服务哪个岗位。
+  #  领导身边的秘书。这里要说清一件事：
+  #  **"书记秘书""市长秘书"不是全国统一的行政职务名称**，
+  #  它是一种工作关系。人事表上写的是办公厅某个处的职务，
+  #  工作上服务某位领导。而且"秘书一处"服务谁，各地并不一样——
+  #  济南市委办公厅秘书一处管的是会务和文件传阅，
+  #  广州叫综合一处，南京干脆单设市长秘书处。
+  #  所以这里只给正式职务，服务对象由 serves 单独记。
   #  级别按"领导升迁时下放正好接得上"来定：
   #  市委书记、市长的秘书是副科级，外放升一级是正科级——乡镇党委书记、乡镇长。
   #  副市长的秘书是科员，外放升一级是副科级——副乡镇长。
-  - {key: sjmishu, name: 书记秘书,   lead: 0, auth: MUNICIPAL, min_age: 25, max_age: 45, party: 1, exp: 4, level: 副科级, protocol: 19}
-  - {key: szmishu, name: 市长秘书,   lead: 0, auth: MUNICIPAL, min_age: 25, max_age: 45, party: 1, exp: 4, level: 副科级, protocol: 19}
-  - {key: fszmishu, name: 副市长秘书, lead: 0, auth: MUNICIPAL, min_age: 24, max_age: 45, party: 0, exp: 2, level: 科员, protocol: 20}
+  - {key: sjmishu, name: 秘书一处副处长, lead: 0, auth: MUNICIPAL, min_age: 25, max_age: 45, party: 1, exp: 4, level: 副科级, protocol: 19}
+  - {key: szmishu, name: 秘书一处副处长, lead: 0, auth: MUNICIPAL, min_age: 25, max_age: 45, party: 1, exp: 4, level: 副科级, protocol: 19}
+  - {key: fszmishu, name: 综合处秘书,     lead: 0, auth: MUNICIPAL, min_age: 24, max_age: 45, party: 0, exp: 2, level: 科员, protocol: 20}
   - {key: mishu,   name: 秘书,      lead: 0, auth: MUNICIPAL,  min_age: 22, max_age: 50, party: 0, exp: 1,  level: 科员,   protocol: 21}
   - {key: shijuzh, name: 局长,      lead: 1, auth: MUNICIPAL,  min_age: 36, max_age: 58, party: 1, exp: 12, level: 正处级, protocol: 10}
   - {key: shikeyuan, name: 科员,    lead: 0, auth: MUNICIPAL,  min_age: 18, max_age: 60, party: 0, exp: 0,  level: 科员,   protocol: 20}
@@ -171,6 +181,10 @@ position_definitions:
   - {key: jwfsj,  name: 副书记,     lead: 1, auth: COUNTY,    min_age: 28, max_age: 55, party: 1, exp: 4,  level: 正科级, protocol: 2}
   #  部门与乡镇
   - {key: buzh,   name: 部长,       lead: 1, auth: COUNTY, min_age: 28, max_age: 56, party: 1, exp: 5, level: 正科级, protocol: 10}
+  - {key: fbuzh,  name: 副部长,     lead: 1, auth: COUNTY, min_age: 26, max_age: 55, party: 1, exp: 3, level: 副科级, protocol: 11}
+  #  政法委的正职是书记，不是部长。它协调公检法司，班子结构也和部委不一样。
+  - {key: zfwsj,  name: 书记,       lead: 1, auth: COUNTY, min_age: 30, max_age: 56, party: 1, exp: 6, level: 正科级, protocol: 10}
+  - {key: zfwfsj, name: 副书记,     lead: 1, auth: COUNTY, min_age: 27, max_age: 55, party: 1, exp: 4, level: 副科级, protocol: 11}
   - {key: juzh,   name: 局长,       lead: 1, auth: COUNTY, min_age: 28, max_age: 57, party: 1, exp: 4, level: 正科级, protocol: 10}
   - {key: fjuzh,  name: 副局长,     lead: 1, auth: COUNTY, min_age: 25, max_age: 55, party: 0, exp: 2, level: 副科级, protocol: 11}
   - {key: zhuren, name: 主任,       lead: 1, auth: COUNTY, min_age: 28, max_age: 57, party: 1, exp: 4, level: 正科级, protocol: 10}
@@ -200,6 +214,7 @@ slots:
   - {org: shengwei, pos: sw_cw,    n: 6}
   - {org: shengzf,  pos: shengzhang, n: 1}
   - {org: shengzf,  pos: fshengzhang, n: 5}
+  - {org: shengzf,  pos: zf_mishuzhang, n: 1}
   - {org: sheng_zzb, pos: sheng_bzh, n: 1}
   - {org: sheng_zzb, pos: shengkeyuan, n: 4}
   - {org: sheng_bgt, pos: sheng_msz,  n: 1}
@@ -219,6 +234,7 @@ slots:
   - {org: shiwei,   pos: swcw,     n: 5}
   - {org: shizf,    pos: shizhang, n: 1}
   - {org: shizf,    pos: fshizhang, n: 4}
+  - {org: shizf,    pos: zf_mishuzhang, n: 1}
   - {org: shi_bgt,  pos: mishuzhang, n: 1}
   - {org: shi_bgt,  pos: fumishuzhang, n: 2}
   - {org: shi_bgt,  pos: ms1chu,  n: 1}
@@ -256,6 +272,7 @@ slots:
   - {org: xianzf,   pos: xzh,      n: 1}
   - {org: xianzf,   pos: cwfxz,    n: 1}
   - {org: xianzf,   pos: fxz,      n: 3}
+  - {org: xianzf,   pos: xzf_mishuzhang, n: 1}
   - {org: zhengxie, pos: zxzx,     n: 1}
   - {org: zhengxie, pos: zxfzx,    n: 3}
   - {org: zhengxie, pos: keyuan,   n: 4}
@@ -266,13 +283,16 @@ slots:
   - {org: xw_bgs,   pos: fzhuren,  n: 2}
   - {org: xw_bgs,   pos: keyuan,   n: 5}
   - {org: zzb,      pos: buzh,     n: 1}
-  - {org: zzb,      pos: fzhuren,  n: 2}
+  - {org: zzb,      pos: fbuzh,    n: 2}
   - {org: zzb,      pos: keyuan,   n: 5}
   - {org: xcb,      pos: buzh,     n: 1}
+  - {org: xcb,      pos: fbuzh,    n: 2}
   - {org: xcb,      pos: keyuan,   n: 4}
   - {org: tzb,      pos: buzh,     n: 1}
+  - {org: tzb,      pos: fbuzh,    n: 1}
   - {org: tzb,      pos: keyuan,   n: 3}
-  - {org: zfw,      pos: buzh,     n: 1}
+  - {org: zfw,      pos: zfwsj,    n: 1}
+  - {org: zfw,      pos: zfwfsj,   n: 2}
   - {org: zfw,      pos: keyuan,   n: 3}
   - {org: zf_bgs,   pos: zhuren,   n: 1}
   - {org: zf_bgs,   pos: fzhuren,  n: 2}
@@ -309,3 +329,27 @@ slots:
   - {org: liulin,   pos: xzsj,     n: 1}
   - {org: liulin,   pos: xzz,      n: 1}
   - {org: liulin,   pos: keyuan,   n: 5}
+
+# ── 兼任（§20）────────────────────────────────────────
+#
+# 这些是常态，不是特例：县委常委兼组织部长、兼宣传部长、兼纪委书记、
+# 兼政法委书记、兼县委办主任；公安局长兼副县长（或县委常委）。
+#
+# 兼任不是"多一个头衔"那么简单，它有结构性后果：
+# 一把手既然是常委、是副县长，就没法天天处理本机关的具体日常事务，
+# 于是这类机关才需要设"分管日常工作的副职"。
+# 《中国共产党工作机关条例》写的正是这一条：
+# 正职由上级机构领导成员兼任的，可以设分管日常工作的副职。
+#
+# 普通的民政局、统计局没有这种安排，所以也不该有常务副局长。
+concurrent:
+  - {holder: {org: xianwei, pos: changwei}, also: {org: zzb,    pos: buzh}}
+  - {holder: {org: xianwei, pos: changwei}, also: {org: xcb,    pos: buzh}}
+  - {holder: {org: xianwei, pos: changwei}, also: {org: jiwei,  pos: jwsj}}
+  - {holder: {org: xianwei, pos: changwei}, also: {org: zfw,    pos: zfwsj}}
+  - {holder: {org: xianwei, pos: changwei}, also: {org: xw_bgs, pos: zhuren}}
+  - {holder: {org: xianzf,  pos: fxz},      also: {org: gaj,    pos: juzh}}
+  - {holder: {org: shiwei,  pos: swcw},     also: {org: shi_zzb, pos: shibuzh}}
+  - {holder: {org: shiwei,  pos: swcw},     also: {org: shi_bgt, pos: mishuzhang}}
+  - {holder: {org: shengwei, pos: sw_cw},   also: {org: sheng_zzb, pos: sheng_bzh}}
+  - {holder: {org: shengwei, pos: sw_cw},   also: {org: sheng_bgt, pos: sheng_msz}}

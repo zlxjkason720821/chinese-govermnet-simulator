@@ -261,7 +261,12 @@ class Game:
         # 领导秘书（大秘）不是领导职务，但它确实是办公厅科员摆在桌上的
         # 一条去向，蓝图十二专门讲过它。所以这里放它进来，
         # 靠"路线"那一栏说清楚它是什么——不是台阶。
-        sec = list(_tk.secretary().get("posts", []))
+        # 秘书岗不按职务名认——"书记秘书"不是职务名。
+        # 按服务关系找：这些岗位的 serves_slot_id 指向某位领导。
+        sec = [r[0] for r in self.con.execute(
+            "SELECT DISTINCT d.name FROM position_slot s "
+            "JOIN position_definition d ON d.id = s.position_definition_id "
+            "WHERE s.serves_slot_id IS NOT NULL")]
         q = ("SELECT d.*, o.system_type AS sys, "
              " count(*) AS total, "
              " sum(s.status='VACANT') AS vacant, "
@@ -293,8 +298,10 @@ class Game:
             # 梯子按你现在所在的行政层级取：市委办公厅的人走市级那张表，
             # 不能和县委办的人共用一张——那正是"只有那老三样"的来源。
             tier = _tk.tier_of(self.con, actions.own_org(self.con, self.player_id))
-            if _tk.is_secretary_post(d["name"]):
-                track, why = "领导秘书", _tk.secretary().get("caution", "")
+            if _tk.is_secretary_slot(self.con, slot_id):
+                track = "领导秘书"
+                why = "服务%s。%s" % (_tk.serves(self.con, slot_id) or "领导",
+                                      _tk.secretary().get("caution", ""))
             elif tgt_sys == mysys and d["name"] in _tk.next_posts(mysys, mylvl, tier):
                 track, why = "本系统上行", "%s%s这条路的下一步" % (
                     _tk.TIER_CN.get(tier, ""), _tk.label(mysys))
@@ -749,12 +756,19 @@ class Game:
             actors = json.loads(r["actors"] or "[]")
             if r["event_type"] == "appointment":  # noqa: E501
                 mine = self.player_id in actors
-                kind = "appointment_self" if mine else "appointment_announced"
-                if not mine and self.rng["text"].random() > 0.35:
-                    continue                # 不是每一次别人的任免都值得写一段
                 name = self._one("SELECT name FROM character WHERE id=?",
                                  (actors[0],))[0] if actors else "有关同志"
-                out.append((on, self.text.render(kind, on, org=self.org_name(),
+                # 谁宣布的，取决于这个岗位归谁管，不是玩家坐在哪儿。
+                org = data.get("authority") or "组织部门"
+                if mine:
+                    kind = "appointment_self"
+                elif data.get("org") == actions.own_org(self.con, self.player_id):
+                    kind = "appointment_announced"      # 本单位的人事，当场宣布
+                else:
+                    kind = "appointment_elsewhere"      # 别处的任免，是听来的
+                    if self.rng["text"].random() > 0.35:
+                        continue        # 不是每一次别人的任免都值得写一段
+                out.append((on, self.text.render(kind, on, org=org,
                                                  post=data.get("title", ""), name=name)))
             elif r["event_type"] == "institution_abolished":
                 mine = self.player_id in actors

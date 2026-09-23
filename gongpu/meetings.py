@@ -51,7 +51,24 @@ def _org_for(con, kind, admin_level="COUNTY"):
 
 
 def members_of(con, org_id, admin_level="COUNTY"):
-    """与会人。常委会是党委班子，常务会议是政府班子。"""
+    """会议的**正式成员**。
+
+    这一层要分清三件事，它们在会场里看着差不多，制度上完全不同：
+
+      正式成员　有议事资格，决定是他们作出的
+      列席　　　因为议题和你这摊有关，叫你进来说明情况，不是会议成员
+      工作人员　办公厅负责文件、记录、会务的人，人在会场，但不议事
+
+    党委常委会的正式成员只有常委——局长、厅长、办公厅处长级别再高，
+    也不存在"当然进入常委会"的资格（《中国共产党地方委员会工作条例》：
+    常委会由书记、副书记和其他常委组成，会议召集人可以根据工作需要
+    确定有关人员列席）。
+
+    政府常务会议这边法律写得更死：《地方各级人民代表大会和地方各级
+    人民政府组织法》规定，常务会议由行政首长、副职和**秘书长**组成。
+    所以一个发改委主任虽然是政府组成人员、可以参加政府全体会议，
+    却不是常务会议的当然成员。
+    """
     return [dict(r) for r in con.execute(
         "SELECT c.id, c.name, h.title_at_time AS title, d.leadership_level AS lvl, "
         " d.protocol_order AS po "
@@ -192,7 +209,12 @@ def _apply(con, item, decision, on, rng, rules=None):
 
 
 def player_role(con, cid, meeting_id):
-    """玩家在这次会上是什么身份。"""
+    """玩家在这次会上是什么身份。
+
+    人在会场不等于列席，列席不等于会议成员。这三件事必须分开：
+    办公厅秘书处的干部负责文件、记录、纪要，本来就在会场工作，
+    但他不是与会人员，也不因为坐在里面就有议事资格。
+    """
     m = con.execute("SELECT * FROM meeting WHERE id=?", (meeting_id,)).fetchone()
     if m is None:
         return "无关"
@@ -205,7 +227,29 @@ def player_role(con, cid, meeting_id):
         "SELECT count(*) FROM meeting_item mi "
         "LEFT JOIN appointment_process p ON p.id = mi.source_id AND mi.source='appointment' "
         "WHERE mi.meeting_id=? AND p.selected_id=?", (meeting_id, cid)).fetchone()[0]
-    return "列席" if hit else "无关"
+    if hit:
+        return "列席"
+    return "工作人员" if _is_secretariat(con, cid, m["organization_id"]) else "无关"
+
+
+def _is_secretariat(con, cid, org_id):
+    """这个人是不是这次会议的会务人员。
+
+    办公厅（办公室）是为这个党委、政府办事的机关，全会、常委会、
+    常务会议的会务本来就归它。在那里工作的人开会时人在场，
+    干的是文件和记录。
+    """
+    mine = con.execute(
+        "SELECT s.organization_id FROM office_holding h "
+        "JOIN position_slot s ON s.id = h.position_slot_id "
+        "WHERE h.character_id=? AND h.end_date IS NULL AND h.primary_position=1 "
+        "LIMIT 1", (cid,)).fetchone()
+    if mine is None:
+        return False
+    r = con.execute(
+        "SELECT parent_id, system_type FROM organization WHERE id=?",
+        (mine[0],)).fetchone()
+    return bool(r and r["system_type"] == "综合" and r["parent_id"] == org_id)
 
 
 def recent(con, limit=40, org_admin_level="COUNTY"):

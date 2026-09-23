@@ -96,20 +96,31 @@ def exit_note(system, tier="县"):
     return _rung(system, tier).get("exit_note", "")
 
 
-SECRETARY_POSTS = set()
-
-
 def secretary():
-    global SECRETARY_POSTS
-    sec = cfg().get("secretary", {})
-    if not SECRETARY_POSTS:
-        SECRETARY_POSTS = set(sec.get("posts", []))
-    return sec
+    return cfg().get("secretary", {})
 
 
-def is_secretary_post(post):
-    secretary()
-    return post in SECRETARY_POSTS
+def is_secretary_slot(con, slot_id):
+    """这个岗位是不是服务某位领导的秘书岗。
+
+    看的是服务关系，不是职务名。"书记秘书""市长秘书"不是全国统一的
+    行政职务名称——人事表上写的是办公厅某个处的职务，工作上服务谁，
+    是另一条信息。各地"秘书一处"服务的对象也并不一样。
+    """
+    r = con.execute("SELECT serves_slot_id FROM position_slot WHERE id=?",
+                    (slot_id,)).fetchone()
+    return bool(r and r[0])
+
+
+def serves(con, slot_id):
+    """这个秘书岗服务谁。返回领导的职务全称，不是秘书岗自己的名字。"""
+    r = con.execute(
+        "SELECT COALESCE(o.short_name,o.name) || d.name FROM position_slot s "
+        "JOIN position_slot ls ON ls.id = s.serves_slot_id "
+        "JOIN organization o ON o.id = ls.organization_id "
+        "JOIN position_definition d ON d.id = ls.position_definition_id "
+        "WHERE s.id = ?", (slot_id,)).fetchone()
+    return r[0] if r else None
 
 
 def classify(con, cid, slot_id):
@@ -130,9 +141,9 @@ def classify(con, cid, slot_id):
     cur_level = _current_level_name(con, cid)
     # 梯子按"你现在在哪一层"取：市委办公厅的人走市级那张表
     tier = tier_of(con, own_org(con, cid))
-    if is_secretary_post(row["post"]):
-        sec = secretary()
-        return "领导秘书", sec.get("caution", "")
+    if is_secretary_slot(con, slot_id):
+        who = serves(con, slot_id)
+        return "领导秘书", "服务%s。%s" % (who or "领导", secretary().get("caution", ""))
     if row["sys"] == mine:
         # 同上：职务重名很常见，系统对上了才算本系统的下一步
         if row["post"] in next_posts(mine, cur_level, tier):

@@ -672,21 +672,6 @@ class Main(QMainWindow):
         self.promo_lay.setAlignment(Qt.AlignTop)
         scroll.setWidget(self.promo_box)
         lay.addWidget(scroll)
-        # 秘书这条路的规矩单列。它是唯一一条"结局取决于别人"的路，
-        # 规矩必须摆在明面上，不能等玩家踩了坑才知道。
-        box = QFrame(); box.setObjectName("ccard")
-        box.setStyleSheet("QFrame#ccard{background:#fdfcf9;border:1px solid %s;"
-                          "border-left:4px solid %s;}"
-                          "QFrame#ccard QLabel{background:transparent;border:none;}"
-                          % (LINE, ACCENT))
-        bl = QVBoxLayout(box); bl.setContentsMargins(14, 10, 14, 10); bl.setSpacing(3)
-        self.sec_title = QLabel("领导秘书（大秘）")
-        self.sec_title.setStyleSheet("font-size:13px;font-weight:bold;color:%s;" % ACCENT)
-        bl.addWidget(self.sec_title)
-        self.sec_body = QLabel(); self.sec_body.setWordWrap(True)
-        self.sec_body.setStyleSheet("color:%s;font-size:12px;" % MUTED)
-        bl.addWidget(self.sec_body)
-        lay.addWidget(box)
         self.tabs.addTab(page, "前程")
 
     def _ladder_cell(self, r, last):
@@ -854,8 +839,11 @@ class Main(QMainWindow):
         role = self.game.my_meeting_role(m["id"])
         self.meet_role.setText(
             {"主持": "你主持这次会议。",
-             "与会": "你是与会人员，可以发表意见。",
-             "列席": "议题涉及你，你列席汇报，不参与决定。",
+             "与会": "你是正式成员，可以发表意见、参与决定。",
+             "列席": "议题涉及你这摊，叫你进来说明情况——"
+                     "列席不等于会议成员，你不参与决定。",
+             "工作人员": "你负责这次会的文件和记录。人在会场，"
+                         "但你不是与会人员，也不列席。",
              "无关": "这次会议与你无关，这里只是记录。"}[role])
         items = self.game.meeting_items(m["id"])
         fill(self.item_table,
@@ -1212,18 +1200,6 @@ class Main(QMainWindow):
         for x in paths:
             self.promo_lay.addWidget(self._promo_card(x))
 
-        sec = g.secretary_rules()
-        NL = chr(10)
-        self.sec_body.setText(NL.join([
-            sec.get("caution", ""),
-            sec.get("gain", ""),
-            "",
-            "".join(sec.get("ladder_note", "").split()),
-            "",
-            "领导落幕那天，你的去向就这么定：",
-        ] + ["　　%s　→　%s" % (o["when"], o["to"])
-             for o in sec.get("outlets", [])]))
-        # 机构树
         self.tree.clear()
         stack = {}
         for n in g.org_tree():

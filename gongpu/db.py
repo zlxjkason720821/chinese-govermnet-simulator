@@ -87,9 +87,18 @@ CREATE TABLE position_slot (
     status        TEXT NOT NULL DEFAULT 'VACANT',   -- VACANT/OCCUPIED/FROZEN
     holder_id     INTEGER REFERENCES character(id),
     -- 蓝图十二：领导个人秘书和办公厅干部不是一回事。
-    -- 这是服务性质的岗位，跟人走——领导调走或者下台，这个位子就没有意义了。
-    -- 指向所服务的领导岗位；办公厅自己的处室岗位这一列为空。
-    serves_slot_id INTEGER REFERENCES position_slot(id)
+    -- "书记秘书""市长秘书"不是全国统一的职务名称，是一种工作关系：
+    -- 正式职务是办公厅某处的职务，服务谁另记一笔。
+    serves_slot_id INTEGER REFERENCES position_slot(id),
+    -- 班子不是"一个正职 + 若干完全相同的副职"。
+    --
+    -- 分管日常工作的副职（很多地方仍称"常务副职"）：《中国共产党工作机关
+    -- 条例》规定，正职由上级机构领导成员兼任的，可以设分管日常工作的副职。
+    -- 所以它不是每个机关都有的固定槽位——它出现在"一把手高配、兼任、
+    -- 还担着更高层职务"的机关里。
+    executive_deputy INTEGER NOT NULL DEFAULT 0,
+    -- 班子排序。同为副职，党组副书记那一位和最后一位不是一回事。
+    leadership_order INTEGER
 );
 
 -- §20 任职历史。同一人可并存多条 = 兼任。
@@ -104,6 +113,17 @@ CREATE TABLE office_holding (
     end_date      TEXT,
     holding_type  TEXT NOT NULL DEFAULT 'FORMAL',
     exit_reason   TEXT,
+    -- 行政职务、党内职务、职级是三个维度，不能合成一个字段。
+    -- 显示出来是"党组副书记、分管日常工作的副局长"这样一串，
+    -- 但库里必须分开存，否则干部调动会把整个结构搞乱。
+    party_post    TEXT,          -- 党组书记/党组副书记/党组成员/党委委员……
+    -- 主持工作：正职空缺或无法履职，副职临时主持整个单位。
+    -- 和"分管日常工作"完全不同——那时正职还在，一把手仍是正职。
+    acting_head   INTEGER NOT NULL DEFAULT 0,
+    -- NORMAL 正常任职 / CONCURRENT 兼任 / SECONDMENT 挂职 / ACTING 主持工作
+    appointment_type TEXT NOT NULL DEFAULT 'NORMAL',
+    -- 高配：职务是副职，个人职级更高。副主任（正部长级）不是主任。
+    personal_rank TEXT,
     primary_position INTEGER NOT NULL DEFAULT 1,
     -- §26 历史称谓不能被覆盖：留任职当时的职务名
     title_at_time TEXT

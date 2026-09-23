@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 from gongpu import (actions, discipline, projects, ranks, relations, scheduler,
                     tasks, training)
-from gongpu import central, meetings, secretary
+from gongpu import central, leadership, meetings, secretary
 from gongpu.appointment import (AppointmentProcess, ProcedureError, STATES,
                                 _age, log_event)
 from gongpu.db import title_of
@@ -478,6 +478,11 @@ def tick(con, on, rng, rules):
     if on.day == 1:
         # 中央委员出缺，候补委员依次递补（党章第二十二条）
         central.fill_vacancies(con, on)
+        # 正职空缺时由排第一的副职主持工作。这和"分管日常工作"不是一回事：
+        # 分管日常工作的时候正职还在，主持工作是正职的位子空着。
+        leadership.install(con, on)
+        leadership.acting_heads(con, on)
+        leadership.assign_party_posts(con)
     _keep_supplied(con, on, rng)
     if (on.month, on.day) == (12, 31):         # 年度考核
         actions.annual_assessment(con, on, rng, rules)

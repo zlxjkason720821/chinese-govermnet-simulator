@@ -20,17 +20,28 @@ def world():
 
 
 def test_每个秘书岗都指明服务谁():
+    """"书记秘书""市长秘书"不是全国统一的行政职务名称，是一种工作关系。
+
+    人事表上写的是办公厅某个处的职务，服务谁另记一笔。各地"秘书一处"
+    服务的对象也不一样，所以不能靠处室名推断。
+    """
+    from gongpu import tracks
     con, _, _, _ = new_game(seed="秘书编制")
     rows = con.execute(
-        "SELECT d.name AS post, d.leadership_level AS lvl, sd.name AS serves "
-        "FROM position_slot s "
+        "SELECT s.id, d.name AS post FROM position_slot s "
         "JOIN position_definition d ON d.id = s.position_definition_id "
-        "JOIN position_slot ss ON ss.id = s.serves_slot_id "
-        "JOIN position_definition sd ON sd.id = ss.position_definition_id").fetchall()
+        "WHERE s.serves_slot_id IS NOT NULL").fetchall()
     assert rows, "市省中央三级都该有领导秘书"
-    posts = {r["post"] for r in rows}
-    assert {"书记秘书", "市长秘书", "省委书记秘书", "省长秘书",
-            "中央领导秘书"} <= posts
+    # 正式职务是真实的办公厅职务，不是"书记秘书"这种非正式称呼
+    for r in rows:
+        assert not r["post"].endswith("书记秘书"), r["post"]
+        assert r["post"] not in ("市长秘书", "副市长秘书", "中央领导秘书"), r["post"]
+        assert tracks.is_secretary_slot(con, r["id"])
+        assert tracks.serves(con, r["id"]), "必须写明服务谁"
+    served = {tracks.serves(con, r["id"]) for r in rows}
+    assert any("总书记" in x for x in served)
+    assert any("省委书记" in x for x in served)
+    assert any("市委书记" in x for x in served)
 
 
 def test_秘书级别和下放的主政岗接得上():
@@ -89,6 +100,15 @@ def test_牵连的去人大政协():
         "WHERE s.serves_slot_id IS NOT NULL AND s.status='OCCUPIED' "
         "AND d.leadership_level='副处级' LIMIT 1").fetchone()
     assert row, "总有一个副处级的秘书"
+    # 腾一个人大的位子出来，保证有地方安置
+    free = con.execute(
+        "SELECT s.id FROM position_slot s "
+        "JOIN organization o ON o.id = s.organization_id "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "WHERE o.organization_type IN ('PEOPLES_CONGRESS','CPPCC') "
+        "AND d.leadership_level='副处级' LIMIT 1").fetchone()
+    con.execute("UPDATE position_slot SET status='VACANT',holder_id=NULL WHERE id=?",
+                (free["id"],))
     dest, why = secretary.outlet(con, row["holder_id"], row["lvl"],
                                  "被查", hurt=True)
     assert "牵连" in why
@@ -117,5 +137,23 @@ def test_没牵连的只是平调():
 def test_秘书经历不是台阶():
     """蓝图十二：不能把它做成'当过秘书所以升得快'。"""
     from gongpu import tracks
-    assert tracks.is_secretary_post("市长秘书")
+    con, _, _, _ = new_game(seed="非台阶")
+    slot = con.execute(
+        "SELECT id FROM position_slot WHERE serves_slot_id IS NOT NULL LIMIT 1"
+    ).fetchone()["id"]
+    assert tracks.is_secretary_slot(con, slot)
     assert "不是台阶" in tracks.secretary()["caution"]
+
+
+def test_秘书身份看服务关系不看职务名():
+    """不存在全国统一的"秘书一处 = 书记秘书"对应表。"""
+    from gongpu import tracks
+    con, _, _, _ = new_game(seed="不看名字")
+    same = con.execute(
+        "SELECT s.id, s.serves_slot_id FROM position_slot s "
+        "JOIN position_definition d ON d.id = s.position_definition_id "
+        "WHERE d.name='秘书一处副处长' ORDER BY s.id").fetchall()
+    assert len(same) >= 2, "同名的秘书一处副处长应当不止一个"
+    # 同一个职务名，服务对象各不相同——所以名字推不出服务谁
+    served = {tracks.serves(con, r["id"]) for r in same if r["serves_slot_id"]}
+    assert len(served) >= 2, served

@@ -495,8 +495,19 @@ class AppointmentProcess:
                         (self.selected_id, self.slot_id, _iso(on), title))
             con.execute("UPDATE appointment_process SET state='ACTIVE',closed_date=? WHERE id=?",
                         (_iso(on), self.id))
+            # 发布机关必须落在有干部管理权限的那个机关上。
+            # 原来叙事里一律写成玩家所在单位，于是出现
+            # "红山县民政局宣布任免：杨民建任中共平州市委副书记"
+            # 这种县里的局宣布市委副书记的荒唐事。
+            auth = con.execute(
+                "SELECT COALESCE(o.short_name,o.name) FROM organization o WHERE o.id=?",
+                (authority_for(con, self.slot_id)["organization_id"],)).fetchone()
+            org_id = con.execute(
+                "SELECT organization_id FROM position_slot WHERE id=?",
+                (self.slot_id,)).fetchone()[0]
             log_event(con, on, "appointment",
-                      {"slot": self.slot_id, "title": title, "freed": freed},
+                      {"slot": self.slot_id, "title": title, "freed": freed,
+                       "authority": auth[0] if auth else None, "org": org_id},
                       actors=[self.selected_id])
         self.state = "ACTIVE"
         return self.selected_id

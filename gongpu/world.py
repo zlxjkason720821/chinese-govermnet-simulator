@@ -11,8 +11,8 @@ from gongpu import paths
 
 import yaml
 
-from gongpu import (migration, ministries, npc, regions, relations, rules,
-                    training)
+from gongpu import (leadership, migration, ministries, npc, regions,
+                    relations, rules, training)
 from gongpu.appointment import log_event
 from gongpu.clock import SimulationClock
 from gongpu.db import open_world, title_of
@@ -106,11 +106,19 @@ def bootstrap(con, rng, cfg=None):
             if must or w.random() < FILL_RATE:
                 _seat(con, cur.lastrowid, levels[s["pos"]], on, w)
 
+    # §20 兼任。县委常委兼组织部长、公安局长兼副县长——这是常态。
+    # 兼任有结构性后果：一把手既然是常委，就顾不上本机关的日常，
+    # 那个机关才需要设分管日常工作的副职。
+    _seat_concurrent(con, cfg, org_id, pdef_id, on, rng)
     # 中央部委。带年代：1986 年是国家教委、外经贸部、冶金工业部那一套，
     # 不是 2026 年的教育部、商务部、工信部。
     ministries.install(con, on, rng)
     # §72 全国其余省份只建省级班子，不往下铺市县——背景世界不必实例化到底
     regions.install(con, on, rng, skip_name=regions.home_province())
+    # 班子不是"一个正职 + 若干完全相同的副职"：排序、党内职务、
+    # 以及该不该设分管日常工作的副职，都在这里定下来。
+    leadership.install(con, on)
+    leadership.assign_party_posts(con)
     relations.seed_colleagues(con, on)
     relations.seed_classmates(con, on, rng)
     con.execute(
@@ -259,6 +267,51 @@ def new_game(seed="1986", player_name="林致远", scenario="county_1986", path=
     on = bootstrap(con, rng, load_scenario(scenario))
     pid = create_player(con, rng, on, player_name)
     return con, rng, SimulationClock(on), pid
+
+
+def _seat_concurrent(con, cfg, org_id, pdef_id, on, rng):
+    """把兼任关系做出来：同一个人并存两条任职记录（§20）。
+
+    主职是层次高的那个（县委常委），兼的是工作部门的正职（组织部长）。
+    """
+    made = 0
+    for c in cfg.get("concurrent", []):
+        hi, lo = c["holder"], c["also"]
+        if hi["org"] not in org_id or lo["org"] not in org_id:
+            continue
+        # 已经有人的高层岗位里挑一个还没兼职的
+        holder = con.execute(
+            "SELECT h.character_id AS cid FROM office_holding h "
+            "JOIN position_slot s ON s.id = h.position_slot_id "
+            "WHERE h.end_date IS NULL AND s.organization_id=? "
+            "AND s.position_definition_id=? "
+            "AND NOT EXISTS (SELECT 1 FROM office_holding h2 "
+            "  JOIN position_slot s2 ON s2.id = h2.position_slot_id "
+            "  WHERE h2.character_id = h.character_id AND h2.end_date IS NULL "
+            "    AND s2.organization_id != s.organization_id) "
+            "ORDER BY h.id LIMIT 1",
+            (org_id[hi["org"]], pdef_id[hi["pos"]])).fetchone()
+        slot = con.execute(
+            "SELECT id FROM position_slot WHERE organization_id=? "
+            "AND position_definition_id=? ORDER BY id LIMIT 1",
+            (org_id[lo["org"]], pdef_id[lo["pos"]])).fetchone()
+        if holder is None or slot is None:
+            continue
+        old = con.execute("SELECT holder_id FROM position_slot WHERE id=?",
+                          (slot["id"],)).fetchone()[0]
+        if old is not None:
+            con.execute("UPDATE office_holding SET end_date=?,exit_reason='CONCURRENT' "
+                        "WHERE position_slot_id=? AND end_date IS NULL",
+                        (on.isoformat(), slot["id"]))
+        con.execute(
+            "INSERT INTO office_holding(character_id,position_slot_id,start_date,"
+            "title_at_time,primary_position,appointment_type) "
+            "VALUES(?,?,?,?,0,'CONCURRENT')",
+            (holder["cid"], slot["id"], on.isoformat(), title_of(con, slot["id"])))
+        con.execute("UPDATE position_slot SET status='OCCUPIED',holder_id=? WHERE id=?",
+                    (holder["cid"], slot["id"]))
+        made += 1
+    return made
 
 
 def advance_to(con, clock, target, rng):
